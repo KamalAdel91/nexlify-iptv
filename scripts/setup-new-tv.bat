@@ -1,6 +1,6 @@
 @echo off
 rem One-time setup for another LG TV: registers it, pairs the PC, installs the app
-rem and prints the token for the daily Developer Mode extension.
+rem and adds its token to the daily Developer Mode extension on GitHub.
 setlocal
 chcp 65001 >nul
 cd /d "%~dp0.."
@@ -37,10 +37,11 @@ call "%~dp0install.bat" %NAME%
 if errorlevel 1 exit /b 1
 
 echo.
-echo [*] Developer Mode token for this TV:
-call "%~dp0get-devmode-token.bat" %NAME%
-echo  Add the token above as a new line in the GitHub secret LG_DEVMODE_TOKENS
-echo  so Developer Mode on this TV is extended every day.
+echo [*] Adding this TV to the daily Developer Mode extension ...
+node "%~dp0sync-tokens.js" %NAME%
+if errorlevel 1 (
+  echo [!] The app is installed, but its token was not saved to GitHub. Fix the message above, then run scripts\sync-tokens.bat
+)
 echo.
 echo  To update this TV later:  scripts\install.bat %NAME%
 endlocal
