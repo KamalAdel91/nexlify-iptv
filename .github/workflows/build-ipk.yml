@@ -1,0 +1,48 @@
+name: Build app package
+
+# Builds the installable .ipk on every change to the app and publishes it
+# as the "latest" release, so it can be downloaded without running any tools.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/build-ipk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install webOS CLI
+        run: npm install -g @webos-tools/cli
+
+      - name: Bundle mpegts.js
+        run: |
+          mkdir -p app/lib
+          curl -fsSL -o app/lib/mpegts.js "https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          ares-package app -o dist
+          ls -l dist
+
+      - name: Publish as the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./app/appinfo.json').version")
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest dist/*.ipk \
+            --title "Nexlify $version" \
+            --notes "Built from ${GITHUB_SHA::7}. Install with webOS Dev Manager or scripts\\install.bat."
