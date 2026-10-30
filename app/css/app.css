@@ -103,7 +103,7 @@ html, body {
 }
 .login-brand { width: 34rem; display: flex; flex-direction: column; align-items: center; }
 .login-box {
-  width: 44rem; background: rgba(18,24,36,.92); padding: 2.6rem 3rem; border-radius: 1.4rem;
+  width: 44rem; background: var(--panel); padding: 2.6rem 3rem; border-radius: 1.4rem;
   border: .08rem solid var(--line); box-shadow: 0 2rem 4rem rgba(0,0,0,.45);
 }
 .login-box h1 { font-size: 2.2rem; margin-bottom: .4rem; }
@@ -486,3 +486,38 @@ html, body {
 [data-theme="pulse"] .column { border-radius: .6rem; }
 [data-theme="pulse"] .menu-item { border-radius: .5rem; }
 [data-theme="pulse"] .row { border-radius: .4rem; }
+
+/* ---------- Dialog: pickers and yes/no questions ---------- */
+.dialog {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 40;
+  background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center;
+}
+.dlg-box {
+  width: 38rem; max-height: 46rem; display: flex; flex-direction: column;
+  background: var(--panel); border: .08rem solid var(--line); border-radius: calc(var(--radius) + .4rem);
+  padding: 1.8rem; box-shadow: 0 2rem 4rem rgba(0,0,0,.55);
+  animation: fade-in .18s ease-out;
+}
+.dlg-title { font-size: 1.7rem; font-weight: 800; margin-bottom: .4rem; }
+.dlg-msg { color: var(--muted); font-size: 1.15rem; line-height: 1.7rem; margin-bottom: .8rem; }
+.dlg-msg:empty { display: none; }
+.dlg-list { overflow: hidden; margin-top: .6rem; }
+.dlg-opt {
+  display: flex; align-items: center; padding: .85rem 1.2rem; border-radius: var(--radius);
+  margin-bottom: .3rem; cursor: pointer; border: .15rem solid transparent;
+}
+.dlg-opt .txt { flex: 1; min-width: 0; }
+.dlg-opt .sub { display: block; font-size: 1rem; color: var(--muted); margin-top: .15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlg-opt .chk { color: var(--accent); font-weight: 800; margin-inline-start: 1rem; }
+.dlg-opt.danger { color: var(--danger); }
+.dlg-opt.focused { background: var(--grad); color: var(--on-accent); }
+.dlg-opt.focused .sub, .dlg-opt.focused .chk { color: var(--on-accent); }
+
+/* The login form has one more field now */
+.login-box label { margin: .8rem 0 .35rem; }
+.login-box .field { padding: .7rem 1rem; }
+.btn.primary { margin-top: 1.4rem; }
+
+/* The hero picture sits behind the Cinema top bar: it must never take the pointer's clicks */
+.hh-bg { pointer-events: none; }
+[data-theme="cinema"] #sidebar { position: relative; z-index: 2; }

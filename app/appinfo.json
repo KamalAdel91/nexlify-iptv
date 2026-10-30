@@ -1,6 +1,6 @@
 {
   "id": "com.homeiptv.player",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "vendor": "Nexlify",
   "type": "web",
   "main": "index.html",

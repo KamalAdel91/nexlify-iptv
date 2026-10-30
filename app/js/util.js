@@ -10,18 +10,39 @@ var Util = (function () {
     RED: 403, GREEN: 404, YELLOW: 405, BLUE: 406
   };
 
+  // Each subscription keeps its own favorites, positions and so on under a scope;
+  // these keys are shared by all of them.
+  var GLOBAL = { lang: 1, theme: 1, accounts: 1, activeAccount: 1, liveFormat: 1, creds: 1 };
+  var scope = '';
+  function fullKey(key) {
+    return 'iptv.' + (scope && !GLOBAL[key] ? scope + '.' : '') + key;
+  }
+
   var store = {
     get: function (key, def) {
       try {
-        var v = localStorage.getItem('iptv.' + key);
+        var v = localStorage.getItem(fullKey(key));
         return v === null ? def : JSON.parse(v);
       } catch (e) { return def; }
     },
     set: function (key, value) {
-      try { localStorage.setItem('iptv.' + key, JSON.stringify(value)); } catch (e) { /* storage full or blocked */ }
+      try { localStorage.setItem(fullKey(key), JSON.stringify(value)); } catch (e) { /* storage full or blocked */ }
     },
     remove: function (key) {
-      try { localStorage.removeItem('iptv.' + key); } catch (e) { /* ignore */ }
+      try { localStorage.removeItem(fullKey(key)); } catch (e) { /* ignore */ }
+    },
+    setScope: function (s) { scope = s || ''; },
+    // Removes everything a subscription stored under its scope
+    clearScope: function (s) {
+      if (!s) return;
+      try {
+        var prefix = 'iptv.' + s + '.', keys = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf(prefix) === 0) keys.push(k);
+        }
+        keys.forEach(function (k) { localStorage.removeItem(k); });
+      } catch (e) { /* ignore */ }
     }
   };
 

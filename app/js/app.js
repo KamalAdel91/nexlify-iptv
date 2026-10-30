@@ -481,6 +481,7 @@
     var fmt = store.get('liveFormat', 'm3u8');
     var u = (account && account.user_info) || {};
     return [
+      { t: 'setting', id: 'accounts', label: t('set_accounts'), value: findAccount(activeId) ? findAccount(activeId).name : '' },
       { t: 'setting', id: 'lang', label: t('set_lang'), value: t('set_lang_value') },
       { t: 'setting', id: 'theme', label: t('set_theme'), value: t('theme_' + theme) },
       { t: 'setting', id: 'format', label: t('set_format'), value: fmt === 'ts' ? 'TS' : 'HLS (m3u8)' },
@@ -506,17 +507,25 @@
 
   function runSetting(it) {
     var i = itemList.index;
-    if (it.id === 'lang') {
-      switchLang();
-      openSection('settings', i);
+    var reopen = function () { openSection('settings', i); setZone('items'); };
+    if (it.id === 'accounts') {
+      openAccountsDialog(false);
+    } else if (it.id === 'lang') {
+      pickDialog(t('set_lang'), [{ label: 'العربية', value: 'ar' }, { label: 'English', value: 'en' }], I18n.lang(), function (v) {
+        if (v !== I18n.lang()) switchLang();
+        reopen();
+      });
     } else if (it.id === 'theme') {
-      applyTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]);
-      [catList, rowList, gridList, seasonList, episodeList, zapList].forEach(function (l) { l.refresh(); });
-      openSection('settings', i);
-      setZone('items');
+      pickDialog(t('set_theme'), THEMES.map(function (n) { return { label: t('theme_' + n), value: n }; }), theme, function (v) {
+        applyTheme(v);
+        [catList, rowList, gridList, seasonList, episodeList, zapList].forEach(function (l) { l.refresh(); });
+        reopen();
+      });
     } else if (it.id === 'format') {
-      store.set('liveFormat', store.get('liveFormat', 'm3u8') === 'ts' ? 'm3u8' : 'ts');
-      openSection('settings', i);
+      pickDialog(t('set_format'), [{ label: 'HLS (m3u8)', value: 'm3u8' }, { label: 'TS', value: 'ts' }], store.get('liveFormat', 'm3u8'), function (v) {
+        store.set('liveFormat', v);
+        reopen();
+      });
     } else if (it.id === 'reload') {
       data = {};
       epgCache = {};
@@ -524,11 +533,8 @@
     } else if (it.id === 'update') {
       checkUpdate();
     } else if (it.id === 'logout') {
-      store.remove('creds');
-      store.remove('session');
-      data = {};
-      api = null;
-      showLogin('');
+      var acc = findAccount(activeId);
+      confirmDialog(t('logout_q', { name: acc ? acc.name : '' }), t('logout_msg'), leaveAccount);
     }
   }
 
@@ -1424,67 +1430,297 @@
     }).then(done, done);
   }
 
-  /* ---------------- Login ---------------- */
+  /* ---------------- Dialog: pick from a list, or answer yes / no ---------------- */
 
-  var loginFields = ['in-server', 'in-user', 'in-pass', 'btn-login', 'btn-lang'];
-  var loginIndex = 0;
+  var dlg = null;   // { options, index, onSelect, onCancel } while open
 
-  function showLogin(error) {
-    var c = store.get('creds', {});
-    $('in-server').value = c.server || '';
-    $('in-user').value = c.username || '';
-    $('in-pass').value = c.password || '';
+  function openDialog(o) {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    dlg = { options: o.options, index: Math.max(0, o.index || 0), onSelect: o.onSelect, onCancel: o.onCancel };
+    $('dlg-title').textContent = o.title || '';
+    $('dlg-msg').textContent = o.message || '';
+    renderDialog();
+    show($('dialog'), true);
+  }
+
+  function renderDialog() {
+    var list = $('dlg-list');
+    list.innerHTML = '';
+    dlg.options.forEach(function (op, i) {
+      var n = el('div', 'dlg-opt' + (op.danger ? ' danger' : '') + (i === dlg.index ? ' focused' : ''));
+      var txt = el('span', 'txt', op.label);
+      if (op.sub) txt.appendChild(el('span', 'sub', op.sub));
+      n.appendChild(txt);
+      if (op.checked) n.appendChild(el('span', 'chk', '✓'));
+      n.addEventListener('click', function () { dlg.index = i; chooseDialog(); });
+      n.addEventListener('mouseover', function () { if (dlg && dlg.index !== i) { dlg.index = i; renderDialog(); } });
+      list.appendChild(n);
+      if (i === dlg.index && n.scrollIntoView) n.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
+  function closeDialog() {
+    dlg = null;
+    show($('dialog'), false);
+  }
+
+  function chooseDialog() {
+    var d = dlg, op = d.options[d.index];
+    closeDialog();
+    if (d.onSelect) d.onSelect(op.value, op);
+  }
+
+  function dialogKey(k) {
+    if (k === K.UP && dlg.index > 0) { dlg.index--; renderDialog(); }
+    else if (k === K.DOWN && dlg.index < dlg.options.length - 1) { dlg.index++; renderDialog(); }
+    else if (k === K.ENTER) chooseDialog();
+    else if (k === K.BACK || k === K.ESC) {
+      var d = dlg;
+      closeDialog();
+      if (d.onCancel) d.onCancel();
+    }
+  }
+
+  // A yes / no question; "No" is selected first so OK never does something by accident
+  function confirmDialog(title, message, onYes) {
+    openDialog({
+      title: title, message: message, index: 1,
+      options: [{ label: t('yes'), value: true, danger: true }, { label: t('no'), value: false }],
+      onSelect: function (yes) { if (yes) onYes(); }
+    });
+  }
+
+  // Choose one of several values; the current one is ticked and selected
+  function pickDialog(title, choices, current, onPick) {
+    var index = 0;
+    choices.forEach(function (c, i) { if (c.value === current) index = i; });
+    openDialog({
+      title: title, index: index,
+      options: choices.map(function (c) { return { label: c.label, value: c.value, checked: c.value === current }; }),
+      onSelect: onPick
+    });
+  }
+
+  /* ---------------- Subscriptions (several saved accounts) ---------------- */
+
+  var accounts = [], activeId = null;
+
+  function loadAccounts() {
+    accounts = store.get('accounts', null);
+    if (!accounts) {
+      // Move the single login of older versions into the list. It keeps the
+      // unscoped storage, so its favorites and progress carry over.
+      accounts = [];
+      var c = store.get('creds', null);
+      if (c && c.server) {
+        accounts.push({ id: 'main', name: t('default_acc', { n: 1 }), server: c.server, username: c.username, password: c.password, scope: '' });
+        store.set('activeAccount', 'main');
+      }
+      store.set('accounts', accounts);
+      store.remove('creds');
+    }
+    activeId = store.get('activeAccount', null);
+  }
+
+  function saveAccounts() { store.set('accounts', accounts); }
+
+  function findAccount(id) {
+    for (var i = 0; i < accounts.length; i++) if (accounts[i].id === id) return accounts[i];
+    return null;
+  }
+
+  function hostOf(url) { return String(url || '').replace(/^https?:\/\//i, '').replace(/\/.*$/, ''); }
+
+  function openAccountsDialog(fromLogin) {
+    var options = accounts.map(function (a) {
+      var inUse = a.id === activeId && !!api;
+      return { label: a.name, sub: inUse ? t('acc_active') : hostOf(a.server), value: a.id, checked: inUse };
+    });
+    if (!fromLogin) options.push({ label: t('acc_add'), value: '__add' });
+    var current = 0;
+    options.forEach(function (o, i) { if (o.checked) current = i; });
+    openDialog({
+      title: fromLogin ? t('saved_accounts') : t('set_accounts'), options: options, index: current,
+      onSelect: function (v) {
+        if (v === '__add') showLogin('', 'add');
+        else if (fromLogin) connectAccount(findAccount(v));
+        else openAccountActions(findAccount(v));
+      }
+    });
+  }
+
+  function openAccountActions(a) {
+    var options = [];
+    if (a.id !== activeId || !api) options.push({ label: t('acc_use'), value: 'use' });
+    options.push({ label: t('acc_edit'), value: 'edit' });
+    options.push({ label: t('acc_delete'), value: 'del', danger: true });
+    openDialog({
+      title: a.name, message: hostOf(a.server) + '  ·  ' + a.username, options: options,
+      onCancel: function () { openAccountsDialog(false); },
+      onSelect: function (v) {
+        if (v === 'use') connectAccount(a);
+        else if (v === 'edit') showLogin('', 'edit', a);
+        else confirmDialog(t('acc_delete_q', { name: a.name }), t('acc_delete_msg'), function () { deleteAccount(a); });
+      }
+    });
+  }
+
+  function deleteAccount(a) {
+    accounts = accounts.filter(function (x) { return x.id !== a.id; });
+    saveAccounts();
+    if (a.scope) store.clearScope(a.scope);
+    if (a.id !== activeId) { openSection('settings', itemList.index); setZone('items'); return; }
+    // Its storage is gone: make sure nothing is saved back for it
+    Player.stop();
+    play = null;
+    api = null;
+    if (accounts.length) { connectAccount(accounts[0]); return; }
+    leaveAccount();
+  }
+
+  // Stop using the current subscription (it stays saved) and show the login screen
+  function leaveAccount() {
+    saveSession();
+    Player.stop();
+    play = null;
+    api = null;
+    activeId = null;
+    store.remove('activeAccount');
+    store.setScope('');
+    data = {};
+    showLogin('', 'first');
+  }
+
+  function backToSettings() {
+    showScreen('browse');
+    openSection('settings');
+    setZone('items');
+  }
+
+  /* ---------------- Login form (first login, add or edit a subscription) ---------------- */
+
+  var LOGIN_FIELDS = ['in-name', 'in-server', 'in-user', 'in-pass', 'btn-login', 'btn-accounts', 'btn-lang'];
+  var loginIndex = 0, loginMode = 'first', editId = null;
+
+  function loginOrder() {
+    return LOGIN_FIELDS.filter(function (id) { return !$(id).classList.contains('hidden'); });
+  }
+
+  function loginTexts() {
+    $('login-title').textContent = t(loginMode === 'edit' ? 'edit_title' : loginMode === 'add' ? 'add_title' : 'login_title');
+    $('btn-login').textContent = t(loginMode === 'first' ? 'login_btn' : 'save');
+  }
+
+  function showLogin(error, mode, acc) {
+    loginMode = mode || 'first';
+    editId = acc ? acc.id : null;
+    $('in-name').value = acc ? acc.name : '';
+    $('in-server').value = acc ? acc.server : '';
+    $('in-user').value = acc ? acc.username : '';
+    $('in-pass').value = acc ? acc.password : '';
     $('login-error').textContent = error || '';
+    // Saved subscriptions can be picked whenever none is connected
+    show($('btn-accounts'), accounts.length > 0 && !api);
+    loginTexts();
     showScreen('login');
-    loginIndex = c.server ? 3 : 0;
+    loginIndex = 0;
     focusLogin();
   }
 
   function focusLogin() {
-    loginFields.forEach(function (id, i) { $(id).classList.toggle('focused', i === loginIndex); });
-    $(loginFields[loginIndex]).focus();
+    var order = loginOrder();
+    loginIndex = Math.min(loginIndex, order.length - 1);
+    LOGIN_FIELDS.forEach(function (id) { $(id).classList.toggle('focused', id === order[loginIndex]); });
+    $(order[loginIndex]).focus();
   }
 
   function doLogin() {
-    var creds = { server: $('in-server').value, username: $('in-user').value, password: $('in-pass').value };
-    if (!creds.server.trim() || !creds.username.trim() || !creds.password.trim()) {
+    var old = editId ? findAccount(editId) : null;
+    var acc = {
+      id: old ? old.id : 'a' + Date.now().toString(36),
+      name: $('in-name').value.trim() || t('default_acc', { n: accounts.length + (old ? 0 : 1) }),
+      server: $('in-server').value, username: $('in-user').value, password: $('in-pass').value
+    };
+    acc.scope = old ? old.scope : acc.id;
+    if (!acc.server.trim() || !acc.username.trim() || !acc.password.trim()) {
       $('login-error').textContent = t('err_fields');
       return;
     }
     $('btn-login').blur();
-    connect(creds, true);
-  }
-
-  function connect(creds, fromForm) {
-    var client = new Xtream(creds);
-    if (fromForm) Util.loading(true, t('connecting'));
-    else showScreen('splash');
+    var client = new Xtream(acc);
+    Util.loading(true, t('connecting'));
     client.login().then(function (info) {
       Util.loading(false);
-      api = client;
-      account = info;
-      store.set('creds', { server: client.server, username: client.username, password: client.password });
-      data = {};
-      showExpiry();
-      var last = store.get('session', null);
-      if (last && last.section) {
-        restoreSession(last);
-      } else {
-        showScreen('browse');
-        menuIndex = 0;
-        openSection('home');
-        setZone(home.rows.length ? 'home' : 'menu');
-        homeStartup = !home.rows.length;
+      acc.server = client.server;
+      acc.username = client.username;
+      acc.password = client.password;
+      var i = accounts.indexOf(old);
+      if (i >= 0) accounts[i] = acc; else accounts.push(acc);
+      saveAccounts();
+      // Editing a subscription that is not in use just saves it
+      if (loginMode === 'edit' && api && acc.id !== activeId) {
+        Util.toast(t('saved'));
+        backToSettings();
+        return;
       }
-      // Fill the "recently added" rows in the background
-      loadKind('vod', true).then(refreshHome, function () {});
-      loadKind('series', true).then(refreshHome, function () {});
+      activateAccount(acc, client, info);
     }, function (err) {
       Util.loading(false);
-      var msg = err && err.message === 'auth' ? t('err_auth') : t('err_connect');
-      if (fromForm) $('login-error').textContent = msg;
-      else showLogin(msg);
+      $('login-error').textContent = err && err.message === 'auth' ? t('err_auth') : t('err_connect');
     });
+  }
+
+  function connectAccount(acc) {
+    if (!acc) return;
+    var client = new Xtream(acc);
+    if (api) saveSession();
+    showScreen('splash');
+    client.login().then(function (info) {
+      activateAccount(acc, client, info);
+    }, function (err) {
+      var msg = err && err.message === 'auth' ? t('err_auth') : t('err_connect');
+      if (api) {
+        // Still connected to the previous subscription: stay there
+        backToSettings();
+        Util.toast(msg, 4000);
+      } else {
+        showLogin(msg, 'edit', acc);
+      }
+    });
+  }
+
+  // Switch everything over to a subscription that just logged in
+  function activateAccount(acc, client, info) {
+    if (api) saveSession();
+    Player.stop();
+    closeDialog();
+    play = null;
+    detailsCtx = null;
+    seriesCtx = null;
+    activeId = acc.id;
+    store.set('activeAccount', acc.id);
+    store.setScope(acc.scope);
+    favs = store.get('favs', []);
+    api = client;
+    account = info;
+    data = {};
+    pending = {};
+    epgCache = {};
+    home.rows = [];
+    showExpiry();
+    var last = store.get('session', null);
+    if (last && last.section) {
+      restoreSession(last);
+    } else {
+      showScreen('browse');
+      menuIndex = 0;
+      openSection('home');
+      setZone(home.rows.length ? 'home' : 'menu');
+      homeStartup = !home.rows.length;
+    }
+    // Fill the "recently added" rows in the background
+    loadKind('vod', true).then(refreshHome, function () {});
+    loadKind('series', true).then(refreshHome, function () {});
   }
 
   function showExpiry() {
@@ -1493,14 +1729,18 @@
   }
 
   function loginKey(k, e) {
+    var order = loginOrder(), id = order[loginIndex];
     if (k === K.UP && loginIndex > 0) { loginIndex--; focusLogin(); e.preventDefault(); }
-    else if (k === K.DOWN && loginIndex < loginFields.length - 1) { loginIndex++; focusLogin(); e.preventDefault(); }
+    else if (k === K.DOWN && loginIndex < order.length - 1) { loginIndex++; focusLogin(); e.preventDefault(); }
     else if (k === K.ENTER) {
       e.preventDefault();
-      if (loginFields[loginIndex] === 'btn-login') doLogin();
-      else if (loginFields[loginIndex] === 'btn-lang') { switchLang(); focusLogin(); }
+      if (id === 'btn-login') doLogin();
+      else if (id === 'btn-accounts') openAccountsDialog(true);
+      else if (id === 'btn-lang') { switchLang(); loginTexts(); focusLogin(); }
       else { loginIndex++; focusLogin(); }
-    } else if (k === K.BACK) tryExit();
+    } else if (k === K.BACK) {
+      if (loginMode !== 'first' && api) backToSettings(); else tryExit();
+    }
   }
 
   /* ---------------- Screens & keys ---------------- */
@@ -1524,6 +1764,7 @@
       if (k === K.BACK) e.preventDefault();
       return;
     }
+    if (dlg) { e.preventDefault(); dialogKey(k); return; }
     if (screen === 'login') { loginKey(k, e); return; }
     if (screen === 'browse' && zone === 'search' && k !== K.DOWN && k !== K.UP && k !== K.BACK && k !== K.ESC) return;
     e.preventDefault();
@@ -1544,7 +1785,7 @@
   }
 
   function onKeyUp(e) {
-    if (e.keyCode !== K.ENTER || !holdable() || zone === 'search') return;
+    if (dlg || e.keyCode !== K.ENTER || !holdable() || zone === 'search') return;
     if (enterTimer) {
       clearTimeout(enterTimer);
       enterTimer = null;
@@ -1615,11 +1856,13 @@
     setInterval(tick, 15000);
     $('search-input').addEventListener('input', Util.debounce(runSearch, 400));
     $('btn-login').addEventListener('click', doLogin);
-    $('btn-lang').addEventListener('click', function () { switchLang(); });
-    loginFields.forEach(function (id, i) {
+    $('btn-accounts').addEventListener('click', function () { openAccountsDialog(true); });
+    $('btn-lang').addEventListener('click', function () { switchLang(); loginTexts(); });
+    LOGIN_FIELDS.forEach(function (id) {
       $(id).addEventListener('focus', function () {
-        loginIndex = i;
-        loginFields.forEach(function (f, j) { $(f).classList.toggle('focused', j === i); });
+        var i = loginOrder().indexOf(id);
+        if (i >= 0) loginIndex = i;
+        LOGIN_FIELDS.forEach(function (f) { $(f).classList.toggle('focused', f === id); });
       });
     });
     // Closing the app, or restarting it for an update, keeps the exact place
@@ -1636,9 +1879,10 @@
       else playVod(play);
     });
 
-    var creds = store.get('creds', null);
-    if (creds && creds.server) connect(creds, false);
-    else showLogin('');
+    loadAccounts();
+    var acc = findAccount(activeId);
+    if (acc) { store.setScope(acc.scope); connectAccount(acc); }
+    else showLogin('', 'first');
     if (window.Boot) Boot.started();
   }
 
