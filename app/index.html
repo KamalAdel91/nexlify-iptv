@@ -154,12 +154,20 @@
             </div>
             <span id="osd-dur">0:00</span>
           </div>
-          <div id="osd-eps" class="osd-eps hidden">
-            <div id="ep-prev" class="ep-btn"><span class="ic">⏮</span><span data-i18n="prev_ep"></span></div>
-            <div id="ep-next" class="ep-btn"><span data-i18n="next_ep"></span><span class="ic">⏭</span></div>
+          <div id="osd-ctl" class="osd-ctl hidden">
+            <div id="ctl-prev" class="ctl"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14l-10-7z"></path></svg><span class="lbl" data-i18n="prev_ep"></span></div>
+            <div id="ctl-rw" class="ctl">−10</div>
+            <div id="ctl-play" class="ctl big"><svg viewBox="0 0 24 24"><path id="ctl-play-icon" d="M6 4h4v16H6zM14 4h4v16h-4z"></path></svg></div>
+            <div id="ctl-ff" class="ctl">+10</div>
+            <div id="ctl-next" class="ctl"><span class="lbl" data-i18n="next_ep"></span><svg viewBox="0 0 24 24"><path d="M4 5v14l10-7zM16 5h2v14h-2z"></path></svg></div>
           </div>
         </div>
       </div>
+    </div>
+    <div id="upnext" class="upnext hidden">
+      <div id="un-label" class="un-label"></div>
+      <div id="un-title" class="un-title"></div>
+      <div class="un-hint" data-i18n="upnext_hint"></div>
     </div>
     <div id="zap-list" class="zap hidden">
       <div class="col-title" id="zap-title"></div>

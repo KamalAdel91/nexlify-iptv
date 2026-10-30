@@ -22,6 +22,33 @@
   };
   var MENU = ['home', 'live', 'vod', 'series', 'fav', 'search', 'settings'];
 
+  // Looks the user can pick in Settings; every one has the same features
+  var THEMES = ['aurora', 'cinema', 'pulse'];
+  var FONTS = {
+    aurora: 'Tajawal:wght@400;500;700;800',
+    cinema: 'Readex+Pro:wght@300;400;500;600;700',
+    pulse: 'IBM+Plex+Sans+Arabic:wght@300;400;500;600;700'
+  };
+  var theme = 'aurora';
+
+  function applyTheme(name) {
+    theme = THEMES.indexOf(name) >= 0 ? name : 'aurora';
+    document.documentElement.setAttribute('data-theme', theme);
+    store.set('theme', theme);
+    // The theme's font comes from Google Fonts; without internet the system font is used
+    var link = document.getElementById('theme-font');
+    if (!link) {
+      link = document.createElement('link');
+      link.id = 'theme-font';
+      link.rel = 'stylesheet';
+      document.head.appendChild(link);
+    }
+    link.href = 'https://fonts.googleapis.com/css2?family=' + FONTS[theme] + '&display=swap';
+  }
+
+  // Cinema puts the menu in a bar across the top instead of a side column
+  function topNav() { return theme === 'cinema'; }
+
   var api = null, account = null;
   var screen = 'login';
   var zone = 'menu';           // browse: menu | cats | items | search ; series: seasons | episodes ; details: actions
@@ -335,6 +362,7 @@
 
   function setZone(z) {
     zone = z;
+    scheduleSave();
     catList.setActive(z === 'cats');
     rowList.setActive(z === 'items');
     gridList.setActive(z === 'items');
@@ -342,7 +370,7 @@
     episodeList.setActive(z === 'episodes');
     var input = $('search-input');
     if (z === 'search') input.focus(); else if (document.activeElement === input) input.blur();
-    $('sidebar').classList.toggle('compact', z !== 'menu');
+    $('sidebar').classList.toggle('compact', theme === 'aurora' && z !== 'menu');
     $('home').classList.toggle('active', z === 'home');
     renderMenu();
   }
@@ -454,6 +482,7 @@
     var u = (account && account.user_info) || {};
     return [
       { t: 'setting', id: 'lang', label: t('set_lang'), value: t('set_lang_value') },
+      { t: 'setting', id: 'theme', label: t('set_theme'), value: t('theme_' + theme) },
       { t: 'setting', id: 'format', label: t('set_format'), value: fmt === 'ts' ? 'TS' : 'HLS (m3u8)' },
       { t: 'setting', id: 'reload', label: t('set_reload') },
       { t: 'setting', id: 'info', label: t('set_exp'), value: u.exp_date ? fmtDate(u.exp_date) : t('unknown') },
@@ -480,6 +509,11 @@
     if (it.id === 'lang') {
       switchLang();
       openSection('settings', i);
+    } else if (it.id === 'theme') {
+      applyTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]);
+      [catList, rowList, gridList, seasonList, episodeList, zapList].forEach(function (l) { l.refresh(); });
+      openSection('settings', i);
+      setZone('items');
     } else if (it.id === 'format') {
       store.set('liveFormat', store.get('liveFormat', 'm3u8') === 'ts' ? 'm3u8' : 'ts');
       openSection('settings', i);
@@ -491,6 +525,7 @@
       checkUpdate();
     } else if (it.id === 'logout') {
       store.remove('creds');
+      store.remove('session');
       data = {};
       api = null;
       showLogin('');
@@ -516,7 +551,8 @@
     if (it.t === 'live') {
       var lives = [], at = 0;
       list.forEach(function (x, i) { if (x.t === 'live') { if (i === index) at = lives.length; lives.push(x); } });
-      playLive(lives, at);
+      var row = section === 'home' && home.rows[home.r];
+      playLive(lives, at, { section: section, cat: section === 'live' ? store.get('cat.live', '*') : null, row: row ? row.key : null });
     } else if (it.t === 'vod') {
       openDetails(it);
     } else if (it.t === 'series') {
@@ -528,9 +564,10 @@
 
   function browseKey(k) {
     if (zone === 'menu') {
-      if (k === K.UP && menuIndex > 0) { menuIndex--; renderMenu(); }
-      else if (k === K.DOWN && menuIndex < MENU.length - 1) { menuIndex++; renderMenu(); }
-      else if (k === NEXT || k === K.ENTER) enterSection();
+      var back = topNav() ? PREV : K.UP, fwd = topNav() ? NEXT : K.DOWN;
+      if (k === back && menuIndex > 0) { menuIndex--; renderMenu(); }
+      else if (k === fwd && menuIndex < MENU.length - 1) { menuIndex++; renderMenu(); }
+      else if (k === (topNav() ? K.DOWN : NEXT) || k === K.ENTER) enterSection();
       else if (k === K.BACK || k === K.ESC) tryExit();
       return;
     }
@@ -541,7 +578,7 @@
       return;
     }
     if (zone === 'cats') {
-      if (k === K.UP) catList.move(-1, 0);
+      if (k === K.UP) { if (!catList.move(-1, 0) && topNav()) setZone('menu'); }
       else if (k === K.DOWN) catList.move(1, 0);
       else if (k === K.CH_UP) catList.page(-1);
       else if (k === K.CH_DOWN) catList.page(1);
@@ -562,6 +599,7 @@
 
       if (!moved) {
         if (k === K.UP && section === 'search') setZone('search');
+        else if (k === K.UP && topNav()) setZone('menu');
         else if (k !== K.UP) setZone($('cats').classList.contains('hidden') ? 'menu' : 'cats');
       }
     }
@@ -714,6 +752,7 @@
     var row = home.rows[home.r];
     if (!row) { if (k === PREV || k === K.BACK || k === K.ESC) setZone('menu'); return; }
     if (k === K.UP && home.r > 0) { home.r--; focusHome(); }
+    else if (k === K.UP && topNav()) setZone('menu');
     else if (k === K.DOWN && home.r < home.rows.length - 1) { home.r++; focusHome(); }
     else if (k === NEXT && row.i < row.items.length - 1) { row.i++; focusHome(); }
     else if (k === PREV) { if (row.i > 0) { row.i--; focusHome(); } else setZone('menu'); }
@@ -818,9 +857,10 @@
   function runAction() {
     var a = detailsCtx.actions[detailsCtx.index], s = detailsCtx.item.s;
     if (a.id === 'fav') { toggleFav(detailsCtx.item); return; }
+    var ext = detailsCtx.ext || s.container_extension;
     playVod({
-      kind: 'vod', item: detailsCtx.item, id: s.stream_id, title: s.name,
-      url: api.movieUrl(s.stream_id, detailsCtx.ext || s.container_extension),
+      kind: 'vod', item: detailsCtx.item, id: s.stream_id, title: s.name, ext: ext,
+      url: api.movieUrl(s.stream_id, ext),
       fromStart: a.id === 'start'
     });
   }
@@ -836,9 +876,9 @@
 
   /* ---------------- Series screen ---------------- */
 
-  function openSeries(it) {
+  function openSeries(it, at) {
     Util.loading(true, t('loading_info'));
-    api.seriesInfo(it.s.series_id).then(function (res) {
+    return api.seriesInfo(it.s.series_id).then(function (res) {
       Util.loading(false);
       var eps = (res && res.episodes) || {};
       var seasons = Object.keys(eps).sort(function (a, b) { return a - b; }).map(function (n) {
@@ -854,12 +894,15 @@
       $('s-plot').textContent = info.plot || '';
       setHero('s', info.cover || it.s.cover, firstBackdrop(info));
       showScreen('series');
-      seasonList.setItems(seasons, store.get('season.' + it.s.series_id, 0));
+      seasonList.setItems(seasons, at && at.season != null ? at.season : store.get('season.' + it.s.series_id, 0));
       showSeason(seasonList.current());
+      if (at && at.ep != null) episodeList.setIndex(at.ep, true);
       setZone('episodes');
+      return true;
     }, function () {
       Util.loading(false);
       Util.toast(t('err_series'));
+      return false;
     });
   }
 
@@ -872,7 +915,7 @@
     episodeList.setItems(list, at);
   }
 
-  function playEpisode(index) {
+  function playEpisode(index, startAt) {
     var it = episodeList.items[index];
     if (!it) return;
     var ep = it.s, series = seriesCtx.item;
@@ -882,7 +925,7 @@
       kind: 'episode', item: series, url: api.episodeUrl(ep.id, ep.container_extension), id: ep.id,
       title: series.s.name + '  ·  ' + t('ep_label', { s: seasonList.current().season, e: ep.episode_num }) +
         (ep.title ? '  ·  ' + ep.title : ''),
-      episodeIndex: index
+      episodeIndex: index, startAt: startAt
     });
   }
 
@@ -919,7 +962,7 @@
     show($('osd'), true);
     clearTimeout(osdTimer);
     // Stay visible while paused or while the pointer is on the seek bar
-    if (ms !== 0 && !overSeek && !dragging && epFocus < 0) osdTimer = setTimeout(function () { show($('osd'), false); }, ms || 5000);
+    if (ms !== 0 && !overSeek && !dragging && ctlFocus < 0) osdTimer = setTimeout(function () { show($('osd'), false); }, ms || 5000);
   }
 
   /* Pointer (Magic Remote) seeking. The bar always runs left-to-right. */
@@ -971,14 +1014,14 @@
       updateProgress();
       showOsd();
     });
-    $('ep-prev').addEventListener('click', function () { goEpisode(-1); });
-    $('ep-next').addEventListener('click', function () { goEpisode(1); });
+    CTLS.forEach(function (id) {
+      $('ctl-' + id).addEventListener('click', function () { runCtl(id); });
+    });
+    $('upnext').addEventListener('click', function () { goEpisode(1); });
     // Clicking the picture pauses or resumes a movie
     $('video').addEventListener('click', function () {
       if (!play || play.kind === 'live') return;
-      var paused = Player.togglePause();
-      show($('pause-icon'), paused);
-      showOsd(paused ? 0 : 4000);
+      togglePlay();
     });
   }
 
@@ -996,14 +1039,17 @@
     show($('pause-icon'), false);
   }
 
-  function playLive(list, index) {
+  function playLive(list, index, src) {
     var it = list[index];
     if (!it) return;
+    // Zapping keeps the list the channel was opened from
+    if (!src && play && play.kind === 'live') src = play.src;
     enterPlayer();
-    play = { kind: 'live', list: list, index: index, item: it, triedTs: false };
+    play = { kind: 'live', list: list, index: index, item: it, triedTs: false, src: src || null };
     show($('osd-progress'), false);
     show($('osd-live'), true);
-    show($('osd-eps'), false);
+    show($('osd-ctl'), false);
+    show($('upnext'), false);
     var useTs = store.get('liveFormat', 'm3u8') === 'ts';
     play.ts = useTs;
     Player.play(api.liveUrl(it.s.stream_id, useTs ? 'ts' : 'm3u8'), { live: true, ts: useTs });
@@ -1031,7 +1077,7 @@
   function playVod(ctx) {
     enterPlayer();
     play = ctx;
-    var startAt = ctx.fromStart ? 0 : store.get(posKey(ctx.kind, ctx.id), 0);
+    var startAt = ctx.fromStart ? 0 : (ctx.startAt != null ? ctx.startAt : store.get(posKey(ctx.kind, ctx.id), 0));
     Player.play(ctx.url, { startAt: startAt });
     if (startAt) Util.toast(t('resume_from', { time: Util.fmtTime(startAt) }));
     show($('osd-num'), false);
@@ -1039,16 +1085,86 @@
     setOsdLogo(null, null);
     show($('osd-live'), false);
     show($('osd-progress'), true);
-    epFocus = -1;
-    show($('osd-eps'), ctx.kind === 'episode');
-    renderEpButtons();
+    ctlFocus = -1;
+    show($('osd-ctl'), true);
+    show($('upnext'), false);
+    renderCtl();
     updateProgress();
     showOsd();
+    scheduleSave();
   }
 
   /* ---------------- Previous / next episode ---------------- */
 
-  var epFocus = -1;   // -1: none, 0: previous, 1: next
+  // Control row, in on-screen order (it runs left to right like the timeline)
+  var CTLS = ['prev', 'rw', 'play', 'ff', 'next'];
+  var ctlFocus = -1;   // index into CTLS, -1 when the row is not focused
+
+  function ctlEnabled(id) {
+    if (id === 'prev') return !!episodeTarget(-1);
+    if (id === 'next') return !!episodeTarget(1);
+    return true;
+  }
+
+  function renderCtl() {
+    var episode = play && play.kind === 'episode';
+    CTLS.forEach(function (id, i) {
+      var b = $('ctl-' + id);
+      if (id === 'prev' || id === 'next') show(b, episode);
+      b.classList.toggle('disabled', !ctlEnabled(id));
+      b.classList.toggle('focused', i === ctlFocus);
+    });
+    $('ctl-play-icon').setAttribute('d', Player.paused() ? 'M7 4v16l13-8z' : 'M6 4h4v16H6zM14 4h4v16h-4z');
+  }
+
+  function togglePlay() {
+    var paused = Player.togglePause();
+    show($('pause-icon'), paused);
+    showOsd(paused ? 0 : 4000);
+    renderCtl();
+  }
+
+  function runCtl(id) {
+    if (!ctlEnabled(id)) return;
+    if (id === 'prev') goEpisode(-1);
+    else if (id === 'next') goEpisode(1);
+    else if (id === 'rw') { Player.seek(-10); updateProgress(); }
+    else if (id === 'ff') { Player.seek(10); updateProgress(); }
+    else if (id === 'play') togglePlay();
+    if (ctlFocus >= 0) showOsd(0);
+  }
+
+  // Remote keys for the control row; returns true when the key was used
+  function ctlKey(k) {
+    if (play.kind === 'episode') {
+      if (k === K.CH_UP) { goEpisode(1); return true; }
+      if (k === K.CH_DOWN) { goEpisode(-1); return true; }
+    }
+    if (ctlFocus < 0) {
+      if (k === K.ENTER && !$('upnext').classList.contains('hidden')) { goEpisode(1); return true; }
+      if (k !== K.DOWN) return false;
+      ctlFocus = CTLS.indexOf('play');
+      renderCtl();
+      showOsd(0);
+      return true;
+    }
+    if (k === K.LEFT || k === K.RIGHT) {
+      var step = k === K.RIGHT ? 1 : -1, i = ctlFocus + step;
+      while (i >= 0 && i < CTLS.length && (!ctlEnabled(CTLS[i]) || $('ctl-' + CTLS[i]).classList.contains('hidden'))) i += step;
+      if (i >= 0 && i < CTLS.length) ctlFocus = i;
+      renderCtl();
+      showOsd(0);
+      return true;
+    }
+    if (k === K.ENTER) { runCtl(CTLS[ctlFocus]); return true; }
+    if (k === K.UP || k === K.BACK || k === K.ESC) {
+      ctlFocus = -1;
+      renderCtl();
+      showOsd();
+      return true;
+    }
+    return false;
+  }
 
   // Where delta (+1/-1) leads from the playing episode, crossing into the next or previous season
   function episodeTarget(delta) {
@@ -1073,37 +1189,8 @@
       showSeason(seasonList.current());
     }
     episodeList.setIndex(to.e, true);
+    show($('upnext'), false);
     playEpisode(to.e);
-    return true;
-  }
-
-  function renderEpButtons() {
-    var prev = $('ep-prev'), next = $('ep-next');
-    prev.classList.toggle('disabled', !episodeTarget(-1));
-    next.classList.toggle('disabled', !episodeTarget(1));
-    prev.classList.toggle('focused', epFocus === 0);
-    next.classList.toggle('focused', epFocus === 1);
-  }
-
-  // Remote keys for the episode buttons; returns true when the key was used
-  function episodeKey(k) {
-    if (k === K.CH_UP) { goEpisode(1); return true; }
-    if (k === K.CH_DOWN) { goEpisode(-1); return true; }
-    if (epFocus < 0) {
-      if (k !== K.DOWN) return false;
-      epFocus = episodeTarget(1) ? 1 : (episodeTarget(-1) ? 0 : -1);
-      if (epFocus < 0) return false;
-      renderEpButtons();
-      showOsd(0);
-      return true;
-    }
-    if (k === NEXT && episodeTarget(1)) epFocus = 1;
-    else if (k === PREV && episodeTarget(-1)) epFocus = 0;
-    else if (k === K.ENTER) { goEpisode(epFocus === 0 ? -1 : 1); return true; }
-    else if (k === K.UP || k === K.BACK || k === K.ESC) { epFocus = -1; renderEpButtons(); showOsd(); return true; }
-    else if (k !== NEXT && k !== PREV) return false;
-    renderEpButtons();
-    showOsd(0);
     return true;
   }
 
@@ -1117,7 +1204,20 @@
       $('osd-bar').style.width = dur ? (cur / dur * 100) + '%' : '0';
       $('osd-knob').style.left = dur ? (cur / dur * 100) + '%' : '0';
     }
-    if (Date.now() - lastSave > 10000) { lastSave = Date.now(); savePosition(); }
+    updateUpNext(cur, dur);
+    renderCtl();
+    if (Date.now() - lastSave > 3000) { lastSave = Date.now(); savePosition(); saveSession(); }
+  }
+
+  // Shown during the last seconds of an episode that has a next one
+  function updateUpNext(cur, dur) {
+    var to = play.kind === 'episode' && dur ? episodeTarget(1) : null;
+    var left = dur - cur, box = $('upnext');
+    if (!to || left > 15 || left <= 0 || Player.paused()) { show(box, false); return; }
+    var season = seasonList.items[to.s], ep = to.s === seasonList.index ? episodeList.items[to.e] : null;
+    $('un-label').textContent = t('upnext_in', { n: Math.ceil(left) });
+    $('un-title').textContent = t('ep_label', { s: season ? season.season : '', e: ep ? ep.s.episode_num : 1 });
+    show(box, true);
   }
 
   function savePosition() {
@@ -1159,6 +1259,7 @@
     Player.stop();
     show($('zap-list'), false);
     show($('osd'), false);
+    show($('upnext'), false);
     showScreen(returnScreen);
     if (returnScreen === 'series') {
       episodeList.refresh();
@@ -1221,13 +1322,11 @@
       return;
     }
 
-    if (play.kind === 'episode' && episodeKey(k)) return;
+    if (ctlKey(k)) return;
 
     // Movies and episodes: the timeline runs left-to-right, so RIGHT always means forward
     if (k === K.ENTER || k === K.PLAY_PAUSE || k === K.PLAY || k === K.PAUSE) {
-      var paused = Player.togglePause();
-      show($('pause-icon'), paused);
-      showOsd(paused ? 0 : 4000);
+      togglePlay();
     } else if (k === K.RIGHT) { Player.seek(10); showOsd(); }
     else if (k === K.LEFT) { Player.seek(-10); showOsd(); }
     else if (k === K.FF) { Player.seek(60); showOsd(); }
@@ -1236,6 +1335,93 @@
     else if (k === K.YELLOW) toggleFav(play.item);
     else if (k === K.BACK || k === K.ESC || k === K.STOP) closePlayer();
     updateProgress();
+  }
+
+  /* ---------------- Session: reopen exactly where the user left off ---------------- */
+
+  var restoring = false;
+
+  function saveSession() {
+    if (!api || restoring || ['browse', 'details', 'series', 'player'].indexOf(screen) < 0) return;
+    var s = { at: Date.now(), screen: screen, section: section, zone: zone, item: itemList ? itemList.index : 0, returnScreen: returnScreen };
+    if (detailsCtx && (screen === 'details' || returnScreen === 'details')) s.details = { t: 'vod', s: snapshot(detailsCtx.item.s) };
+    if (seriesCtx && (screen === 'series' || returnScreen === 'series')) {
+      s.series = { item: { t: 'series', s: snapshot(seriesCtx.item.s) }, season: seasonList.index, ep: episodeList.index };
+    }
+    if (screen === 'player' && play) {
+      var p = { kind: play.kind, item: { t: play.item.t, s: snapshot(play.item.s) } };
+      if (play.kind === 'live') p.src = play.src || null;
+      else {
+        p.pos = Math.floor(Player.time()) || store.get(posKey(play.kind, play.id), 0);
+        p.ext = play.ext;
+      }
+      if (play.kind === 'episode') { p.season = seasonList.index; p.ep = play.episodeIndex; }
+      s.play = p;
+    }
+    store.set('session', s);
+  }
+  var scheduleSave = Util.debounce(saveSession, 400);
+
+  // The channel list a live channel was opened from, so zapping still works after a restart
+  function liveListFor(src, item) {
+    var d = data.live, list = null;
+    if (src && src.section === 'live' && d) {
+      if (!src.cat || src.cat === '*') list = d.all;
+      else if (src.cat === 'recent') list = savedItems('recentLive', 'live');
+      else list = d.byCat[src.cat];
+    } else if (src && (src.section === 'fav' || src.row === 'row_fav_live')) {
+      list = favs.filter(function (f) { return f.t === 'live'; }).map(function (f) { return { t: 'live', s: f.s }; });
+    } else if (src && src.row === 'row_recent') {
+      list = savedItems('recentLive', 'live');
+    }
+    if (!list || !list.length) list = d ? d.all : [];
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].s.stream_id) === String(item.s.stream_id)) return { list: list, index: i };
+    }
+    return { list: [item], index: 0 };
+  }
+
+  function restoreSession(s) {
+    restoring = true;
+    var done = function () { restoring = false; scheduleSave(); };
+    var sec = MENU.indexOf(s.section) >= 0 ? s.section : 'home';
+    menuIndex = MENU.indexOf(sec);
+    showScreen('browse');
+    openSection(sec).then(function () {
+      if (sec !== 'home' && s.item && itemList.items.length) itemList.setIndex(s.item, true);
+      var z = s.zone;
+      if (sec === 'home') z = home.rows.length ? 'home' : 'menu';
+      else if (z === 'cats' && $('cats').classList.contains('hidden')) z = 'menu';
+      else if (z === 'items' && !itemList.items.length) z = 'menu';
+      else if (['cats', 'items'].indexOf(z) < 0) z = 'menu';
+      setZone(z);
+      if (sec === 'home') homeStartup = !home.rows.length;
+
+      var p = s.play;
+      if (s.screen === 'player' && p) {
+        if (p.kind === 'live') {
+          return loadKind('live').then(function () {
+            var at = liveListFor(p.src, p.item);
+            playLive(at.list, at.index, p.src);
+          });
+        }
+        if (p.kind === 'vod') {
+          if (s.returnScreen === 'details') openDetails(p.item);
+          playVod({
+            kind: 'vod', item: p.item, id: p.item.s.stream_id, title: p.item.s.name, ext: p.ext,
+            url: api.movieUrl(p.item.s.stream_id, p.ext || p.item.s.container_extension), startAt: p.pos
+          });
+          return;
+        }
+        if (p.kind === 'episode') {
+          return openSeries(p.item, { season: p.season, ep: p.ep }).then(function (ok) {
+            if (ok) playEpisode(episodeList.index, p.pos);
+          });
+        }
+      }
+      if (s.screen === 'details' && s.details) { openDetails(s.details); return; }
+      if (s.screen === 'series' && s.series) return openSeries(s.series.item, { season: s.series.season, ep: s.series.ep });
+    }).then(done, done);
   }
 
   /* ---------------- Login ---------------- */
@@ -1280,11 +1466,16 @@
       store.set('creds', { server: client.server, username: client.username, password: client.password });
       data = {};
       showExpiry();
-      showScreen('browse');
-      menuIndex = 0;
-      openSection('home');
-      setZone(home.rows.length ? 'home' : 'menu');
-      homeStartup = !home.rows.length;
+      var last = store.get('session', null);
+      if (last && last.section) {
+        restoreSession(last);
+      } else {
+        showScreen('browse');
+        menuIndex = 0;
+        openSection('home');
+        setZone(home.rows.length ? 'home' : 'menu');
+        homeStartup = !home.rows.length;
+      }
       // Fill the "recently added" rows in the background
       loadKind('vod', true).then(refreshHome, function () {});
       loadKind('series', true).then(refreshHome, function () {});
@@ -1316,6 +1507,7 @@
 
   function showScreen(name) {
     screen = name;
+    scheduleSave();
     ['splash', 'login', 'browse', 'details', 'series', 'player'].forEach(function (s) { show($(s), s === name); });
     // Lists measure themselves, so redraw once their screen is visible
     if (name === 'browse') { catList.setIndex(catList.index, true); itemList.setIndex(itemList.index, true); }
@@ -1370,6 +1562,7 @@
   /* ---------------- Init ---------------- */
 
   function init() {
+    applyTheme(store.get('theme', 'aurora'));
     applyDir();
     I18n.apply();
 
@@ -1429,11 +1622,14 @@
         loginFields.forEach(function (f, j) { $(f).classList.toggle('focused', j === i); });
       });
     });
+    // Closing the app, or restarting it for an update, keeps the exact place
+    window.addEventListener('beforeunload', function () { saveSession(); });
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
 
     // Free the stream (and the provider's connection slot) while the app is in the background
     document.addEventListener('visibilitychange', function () {
+      if (document.hidden) saveSession();
       if (screen !== 'player' || !play) return;
       if (document.hidden) { savePosition(); Player.stop(); }
       else if (play.kind === 'live') playLive(play.list, play.index);
