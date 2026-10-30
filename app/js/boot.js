@@ -10,7 +10,7 @@
 (function () {
   'use strict';
 
-  var UPDATE_URL = 'https://raw.githubusercontent.com/KamalAdel91/nexlify-app/main/bundle.json';
+  var UPDATE_URL = 'https://raw.githubusercontent.com/KamalAdel91/nexlify-iptv/main/update/bundle.json';
   var LOCAL_FILES = ['js/util.js', 'js/i18n.js', 'js/xtream.js', 'js/vlist.js', 'js/player.js', 'js/app.js'];
 
   // Same storage prefix as Util.store, which is not loaded yet

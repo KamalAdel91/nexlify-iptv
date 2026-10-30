@@ -102,7 +102,7 @@ scripts\install.bat
 
 في فولدر `extras/workflows` فيه ملفين جاهزين:
 - **`build-ipk.yml`**: بيعمل ملف `.ipk` أوتوماتيك مع كل تحديث، وبيحطه في صفحة **Releases**.
-- **`extend-devmode.yml`**: بيجدد Developer Mode كل يوم **لكل الشاشات** اللي في `LG_DEVMODE_TOKENS`، كل token في سطر. ولسه بيقرا كمان الـ secret القديم `LG_DEVMODE_TOKEN`.
+- **`extend-devmode.yml`**: بيجدد Developer Mode كل يوم **لكل الشاشات** اللي في `LG_DEVMODE_TOKENS`، كل token في سطر. ولسه بيقرا كمان الـ secret القديم `LG_DEVMODE_TOKEN`. وكمان بيعمل تعديل صغير كل فترة، عشان GitHub مايوقفش المهام المجدولة في الـ repo العام بعد 60 يوم من غير نشاط.
 
 **عشان تفعّلهم من موقع GitHub:**
 1. افتح الملف، ودوس على ✏️ (Edit).
@@ -114,7 +114,7 @@ scripts\install.bat
 ## التحديث عن بعد (من غير كمبيوتر)
 
 من نسخة 1.2.0، التطبيق بيحدّث نفسه من النت لوحده:
-- كل ما يفتح، بيدوّر في الخلفية على نسخة أجدد في الـ repo العام [`nexlify-app`](https://github.com/KamalAdel91/nexlify-app) (ملف `bundle.json`).
+- كل ما يفتح، بيدوّر في الخلفية على نسخة أجدد في الملف `update/bundle.json` في الـ repo ده (لازم الـ repo يكون Public).
 - لو لقى، بينزّلها وتشتغل من المرة الجاية. ولو عايزها على طول، روح على **الإعدادات ← دوّر على تحديث**.
 - **حماية:** لو نسخة جديدة طلع فيها مشكلة ومنعت التطبيق يفتح، بيرجع لوحده للنسخة المتثبتة على الشاشة.
 
@@ -122,9 +122,9 @@ scripts\install.bat
 1. زوّد رقم النسخة في `app/js/version.js` وفي `app/appinfo.json`، ولازم الاتنين يبقوا نفس الرقم.
 2. اعمل ملف التحديث:
    ```
-   node scripts/build-bundle.js dist/bundle.json
+   node scripts/build-bundle.js
    ```
-3. ارفع `dist/bundle.json` على الـ repo `nexlify-app` بدل القديم.
+3. ارفع التعديلات على GitHub، والملف `update/bundle.json` معاهم.
 
 > التحديث عن بعد بيغيّر الشكل والكود بس. لو اتغيرت الأيقونة أو `appinfo.json` أو مكتبة mpegts.js، لازم تثبّت بـ `install.bat` تاني.
 

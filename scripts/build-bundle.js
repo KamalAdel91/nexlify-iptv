@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /*
  * Builds bundle.json, the over-the-internet update that installed TVs download
- * (see app/js/boot.js). Usage: node scripts/build-bundle.js <output-file>
+ * (see app/js/boot.js). Usage: node scripts/build-bundle.js [output-file]
+ * Default output: update/bundle.json, the file installed TVs download from GitHub.
  * Bump APP_VERSION in app/js/version.js and appinfo.json before publishing.
  */
 'use strict';
@@ -10,7 +11,7 @@ const path = require('path');
 
 const APP = path.join(__dirname, '..', 'app');
 const JS = ['js/util.js', 'js/i18n.js', 'js/xtream.js', 'js/vlist.js', 'js/player.js', 'js/app.js'];
-const out = process.argv[2] || path.join(__dirname, '..', 'dist', 'bundle.json');
+const out = process.argv[2] || path.join(__dirname, '..', 'update', 'bundle.json');
 
 const read = (f) => fs.readFileSync(path.join(APP, f), 'utf8');
 
