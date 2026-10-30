@@ -880,7 +880,8 @@
     touch('continue', 'series', series.s);
     playVod({
       kind: 'episode', item: series, url: api.episodeUrl(ep.id, ep.container_extension), id: ep.id,
-      title: series.s.name + '  ·  ' + (ep.title || t('episode', { n: ep.episode_num })),
+      title: series.s.name + '  ·  ' + t('ep_label', { s: seasonList.current().season, e: ep.episode_num }) +
+        (ep.title ? '  ·  ' + ep.title : ''),
       episodeIndex: index
     });
   }
@@ -918,7 +919,7 @@
     show($('osd'), true);
     clearTimeout(osdTimer);
     // Stay visible while paused or while the pointer is on the seek bar
-    if (ms !== 0 && !overSeek && !dragging) osdTimer = setTimeout(function () { show($('osd'), false); }, ms || 5000);
+    if (ms !== 0 && !overSeek && !dragging && epFocus < 0) osdTimer = setTimeout(function () { show($('osd'), false); }, ms || 5000);
   }
 
   /* Pointer (Magic Remote) seeking. The bar always runs left-to-right. */
@@ -970,6 +971,8 @@
       updateProgress();
       showOsd();
     });
+    $('ep-prev').addEventListener('click', function () { goEpisode(-1); });
+    $('ep-next').addEventListener('click', function () { goEpisode(1); });
     // Clicking the picture pauses or resumes a movie
     $('video').addEventListener('click', function () {
       if (!play || play.kind === 'live') return;
@@ -1000,6 +1003,7 @@
     play = { kind: 'live', list: list, index: index, item: it, triedTs: false };
     show($('osd-progress'), false);
     show($('osd-live'), true);
+    show($('osd-eps'), false);
     var useTs = store.get('liveFormat', 'm3u8') === 'ts';
     play.ts = useTs;
     Player.play(api.liveUrl(it.s.stream_id, useTs ? 'ts' : 'm3u8'), { live: true, ts: useTs });
@@ -1035,8 +1039,72 @@
     setOsdLogo(null, null);
     show($('osd-live'), false);
     show($('osd-progress'), true);
+    epFocus = -1;
+    show($('osd-eps'), ctx.kind === 'episode');
+    renderEpButtons();
     updateProgress();
     showOsd();
+  }
+
+  /* ---------------- Previous / next episode ---------------- */
+
+  var epFocus = -1;   // -1: none, 0: previous, 1: next
+
+  // Where delta (+1/-1) leads from the playing episode, crossing into the next or previous season
+  function episodeTarget(delta) {
+    if (!play || play.kind !== 'episode') return null;
+    var si = seasonList.index, ei = play.episodeIndex;
+    if (delta > 0) {
+      if (ei + 1 < episodeList.items.length) return { s: si, e: ei + 1 };
+      if (si + 1 < seasonList.items.length) return { s: si + 1, e: 0 };
+    } else {
+      if (ei > 0) return { s: si, e: ei - 1 };
+      if (si > 0) return { s: si - 1, e: seasonList.items[si - 1].count - 1 };
+    }
+    return null;
+  }
+
+  function goEpisode(delta) {
+    var to = episodeTarget(delta);
+    if (!to) return false;
+    savePosition();
+    if (to.s !== seasonList.index) {
+      seasonList.setIndex(to.s, true);
+      showSeason(seasonList.current());
+    }
+    episodeList.setIndex(to.e, true);
+    playEpisode(to.e);
+    return true;
+  }
+
+  function renderEpButtons() {
+    var prev = $('ep-prev'), next = $('ep-next');
+    prev.classList.toggle('disabled', !episodeTarget(-1));
+    next.classList.toggle('disabled', !episodeTarget(1));
+    prev.classList.toggle('focused', epFocus === 0);
+    next.classList.toggle('focused', epFocus === 1);
+  }
+
+  // Remote keys for the episode buttons; returns true when the key was used
+  function episodeKey(k) {
+    if (k === K.CH_UP) { goEpisode(1); return true; }
+    if (k === K.CH_DOWN) { goEpisode(-1); return true; }
+    if (epFocus < 0) {
+      if (k !== K.DOWN) return false;
+      epFocus = episodeTarget(1) ? 1 : (episodeTarget(-1) ? 0 : -1);
+      if (epFocus < 0) return false;
+      renderEpButtons();
+      showOsd(0);
+      return true;
+    }
+    if (k === NEXT && episodeTarget(1)) epFocus = 1;
+    else if (k === PREV && episodeTarget(-1)) epFocus = 0;
+    else if (k === K.ENTER) { goEpisode(epFocus === 0 ? -1 : 1); return true; }
+    else if (k === K.UP || k === K.BACK || k === K.ESC) { epFocus = -1; renderEpButtons(); showOsd(); return true; }
+    else if (k !== NEXT && k !== PREV) return false;
+    renderEpButtons();
+    showOsd(0);
+    return true;
   }
 
   var lastSave = 0;
@@ -1082,11 +1150,7 @@
     if (!play || play.kind === 'live') return;
     store.remove(posKey(play.kind, play.id));
     if (play.kind === 'vod') drop('continue', 'vod', play.id);
-    if (play.kind === 'episode' && play.episodeIndex + 1 < episodeList.items.length) {
-      episodeList.setIndex(play.episodeIndex + 1, true);
-      playEpisode(play.episodeIndex + 1);
-      return;
-    }
+    if (play.kind === 'episode' && goEpisode(1)) return;
     closePlayer();
   }
 
@@ -1156,6 +1220,8 @@
       else if (k === K.BACK || k === K.ESC || k === K.STOP) closePlayer();
       return;
     }
+
+    if (play.kind === 'episode' && episodeKey(k)) return;
 
     // Movies and episodes: the timeline runs left-to-right, so RIGHT always means forward
     if (k === K.ENTER || k === K.PLAY_PAUSE || k === K.PLAY || k === K.PAUSE) {

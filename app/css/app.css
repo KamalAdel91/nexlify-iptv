@@ -289,6 +289,19 @@ html, body {
   font-size: 1.05rem; white-space: nowrap;
 }
 
+/* Previous / next episode buttons */
+.osd-eps { display: flex; margin-top: 1.2rem; pointer-events: auto; }
+.ep-btn {
+  display: flex; align-items: center; padding: .7rem 1.4rem; border-radius: .7rem;
+  background: rgba(255,255,255,.1); border: .15rem solid transparent;
+  font-weight: bold; cursor: pointer; margin-inline-end: 1rem;
+  transition: transform .12s, background .12s;
+}
+.ep-btn .ic { margin: 0 .6rem; }
+.ep-btn.disabled { opacity: .3; cursor: default; }
+.ep-btn.focused { background: var(--grad); color: #fff; transform: scale(1.05); box-shadow: 0 .6rem 1.6rem rgba(79,140,255,.35); }
+.ep-btn:not(.disabled):hover { background: rgba(255,255,255,.2); }
+
 .pause-icon { position: absolute; top: 50%; left: 50%; width: 7rem; height: 7rem; margin: -3.5rem 0 0 -3.5rem; border-radius: 50%; background: rgba(5,8,14,.7); display: flex; align-items: center; justify-content: center; }
 .pause-icon span { width: .9rem; height: 2.8rem; background: #fff; border-radius: .2rem; margin: 0 .4rem; }
 
