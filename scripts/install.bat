@@ -10,6 +10,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
+if not exist "app\lib" mkdir "app\lib"
 if not exist "app\lib\mpegts.js" (
   echo [*] Downloading mpegts.js ...
   curl -fsSL -o "app\lib\mpegts.js" "https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"
