@@ -95,8 +95,13 @@ var Player = (function () {
     video.currentTime = Math.min(Math.max(video.currentTime + delta, 0), video.duration - 1);
   }
 
+  function seekTo(sec) {
+    if (!isFinite(video.duration)) return;
+    video.currentTime = Math.min(Math.max(sec, 0), video.duration - 1);
+  }
+
   return {
-    init: init, play: play, stop: stop, togglePause: togglePause, seek: seek,
+    init: init, play: play, stop: stop, togglePause: togglePause, seek: seek, seekTo: seekTo,
     time: function () { return video.currentTime || 0; },
     duration: function () { return isFinite(video.duration) ? video.duration : 0; },
     paused: function () { return video.paused; }

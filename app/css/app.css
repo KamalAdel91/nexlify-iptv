@@ -271,8 +271,23 @@ html, body {
 .osd-title { font-size: 2rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: .2rem; }
 #osd-live .bar { max-width: 50rem; margin-bottom: .5rem; }
 .progress { display: flex; align-items: center; margin-top: 1rem; direction: ltr; font-size: 1.1rem; }
-.progress .bar { flex: 1; height: .45rem; margin: 0 1.2rem; }
 [dir="rtl"] .progress .bar > div { margin: 0; }
+/* Seek bar: also usable with the Magic Remote pointer */
+.progress { pointer-events: auto; }
+.seek { position: relative; flex: 1; margin: 0 1.2rem; padding: 1rem 0; cursor: pointer; }
+.seek .bar { height: .45rem; transition: height .12s; }
+.seek:hover .bar, .seek.dragging .bar { height: .75rem; }
+.knob {
+  position: absolute; top: 50%; left: 0; width: 1.4rem; height: 1.4rem; margin: -.7rem 0 0 -.7rem;
+  border-radius: 50%; background: #fff; box-shadow: 0 0 0 .3rem rgba(79,140,255,.45);
+  opacity: 0; transition: opacity .12s;
+}
+.seek:hover .knob, .seek.dragging .knob { opacity: 1; }
+.seek-tip {
+  position: absolute; bottom: 2.6rem; left: 0; transform: translateX(-50%);
+  background: var(--panel-2); border: .08rem solid var(--line); padding: .3rem .8rem; border-radius: .5rem;
+  font-size: 1.05rem; white-space: nowrap;
+}
 
 .pause-icon { position: absolute; top: 50%; left: 50%; width: 7rem; height: 7rem; margin: -3.5rem 0 0 -3.5rem; border-radius: 50%; background: rgba(5,8,14,.7); display: flex; align-items: center; justify-content: center; }
 .pause-icon span { width: .9rem; height: 2.8rem; background: #fff; border-radius: .2rem; margin: 0 .4rem; }

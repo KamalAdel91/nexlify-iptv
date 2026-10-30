@@ -726,11 +726,70 @@
 
   /* ---------------- Player ---------------- */
 
-  var osdTimer = null;
+  var osdTimer = null, overSeek = false, dragging = false;
   function showOsd(ms) {
     show($('osd'), true);
     clearTimeout(osdTimer);
-    if (ms !== 0) osdTimer = setTimeout(function () { show($('osd'), false); }, ms || 5000);
+    // Stay visible while paused or while the pointer is on the seek bar
+    if (ms !== 0 && !overSeek && !dragging) osdTimer = setTimeout(function () { show($('osd'), false); }, ms || 5000);
+  }
+
+  /* Pointer (Magic Remote) seeking. The bar always runs left-to-right. */
+  function seekFraction(e) {
+    var r = $('osd-seek').getBoundingClientRect();
+    return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  }
+
+  function previewSeek(e, withBar) {
+    var dur = Player.duration();
+    if (!dur) return;
+    var f = seekFraction(e), tip = $('osd-tip');
+    tip.textContent = Util.fmtTime(f * dur);
+    tip.style.left = f * 100 + '%';
+    show(tip, true);
+    if (withBar) {
+      $('osd-bar').style.width = f * 100 + '%';
+      $('osd-knob').style.left = f * 100 + '%';
+    }
+  }
+
+  function initPointer() {
+    var seek = $('osd-seek');
+    seek.addEventListener('mousedown', function (e) {
+      if (!play || play.kind === 'live' || !Player.duration()) return;
+      e.preventDefault();
+      dragging = true;
+      seek.classList.add('dragging');
+      previewSeek(e, true);
+      showOsd();
+    });
+    seek.addEventListener('mousemove', function (e) { if (!dragging) previewSeek(e, false); });
+    seek.addEventListener('mouseenter', function () { overSeek = true; showOsd(); });
+    seek.addEventListener('mouseleave', function () {
+      overSeek = false;
+      if (!dragging) { show($('osd-tip'), false); showOsd(); }
+    });
+    document.addEventListener('mousemove', function (e) {
+      if (screen !== 'player') return;
+      if (dragging) previewSeek(e, true);
+      else if ($('zap-list').classList.contains('hidden')) showOsd(Player.paused() ? 0 : 4000);
+    });
+    document.addEventListener('mouseup', function (e) {
+      if (!dragging) return;
+      dragging = false;
+      seek.classList.remove('dragging');
+      Player.seekTo(seekFraction(e) * Player.duration());
+      if (!overSeek) show($('osd-tip'), false);
+      updateProgress();
+      showOsd();
+    });
+    // Clicking the picture pauses or resumes a movie
+    $('video').addEventListener('click', function () {
+      if (!play || play.kind === 'live') return;
+      var paused = Player.togglePause();
+      show($('pause-icon'), paused);
+      showOsd(paused ? 0 : 4000);
+    });
   }
 
   function setOsdLogo(src, name) {
@@ -760,6 +819,7 @@
     touch('recentLive', 'live', it.s, null, 20);
 
     $('osd-num').textContent = it.s.num || (index + 1);
+    show($('osd-num'), true);
     $('osd-title').textContent = it.s.name;
     setOsdLogo(it.s.stream_icon, it.s.name);
     fillEpg(OSD, []);
@@ -783,7 +843,7 @@
     var startAt = ctx.fromStart ? 0 : store.get(posKey(ctx.kind, ctx.id), 0);
     Player.play(ctx.url, { startAt: startAt });
     if (startAt) Util.toast(t('resume_from', { time: Util.fmtTime(startAt) }));
-    $('osd-num').textContent = '';
+    show($('osd-num'), false);
     $('osd-title').textContent = ctx.title;
     setOsdLogo(null, null);
     show($('osd-live'), false);
@@ -798,7 +858,10 @@
     var cur = Player.time(), dur = Player.duration();
     $('osd-cur').textContent = Util.fmtTime(cur);
     $('osd-dur').textContent = dur ? '-' + Util.fmtTime(dur - cur) : '0:00';
-    $('osd-bar').style.width = dur ? (cur / dur * 100) + '%' : '0';
+    if (!dragging) {
+      $('osd-bar').style.width = dur ? (cur / dur * 100) + '%' : '0';
+      $('osd-knob').style.left = dur ? (cur / dur * 100) + '%' : '0';
+    }
     if (Date.now() - lastSave > 10000) { lastSave = Date.now(); savePosition(); }
   }
 
@@ -1093,6 +1156,7 @@
     });
 
     Player.init({ onError: onPlayerError, onEnded: onEnded, onTime: updateProgress });
+    initPointer();
 
     buildMenu();
     tick();
