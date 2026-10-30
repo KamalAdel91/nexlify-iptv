@@ -101,6 +101,18 @@ html, body {
   border-inline-end: .08rem solid var(--line);
 }
 #menu { flex: 1; }
+/* Collapses to icons only while the user works in the content columns */
+#sidebar { transition: width .2s, padding .2s; overflow: hidden; }
+#sidebar.compact { width: 6.4rem; padding: 2rem .9rem 1.6rem; }
+#sidebar.compact .brand { justify-content: center; padding: 0 0 2.2rem; }
+#sidebar.compact .brand-name,
+#sidebar.compact .menu-item span,
+#sidebar.compact #date,
+#sidebar.compact #exp { display: none; }
+#sidebar.compact .menu-item { justify-content: center; padding: .95rem 0; }
+#sidebar.compact .menu-item svg { margin: 0; }
+#sidebar.compact .side-foot { padding: 0; }
+#sidebar.compact .clock { font-size: 1.15rem; text-align: center; }
 .menu-item {
   display: flex; align-items: center;
   padding: .95rem 1.1rem; border-radius: .8rem; margin-bottom: .35rem;

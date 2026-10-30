@@ -327,6 +327,7 @@
     episodeList.setActive(z === 'episodes');
     var input = $('search-input');
     if (z === 'search') input.focus(); else if (document.activeElement === input) input.blur();
+    $('sidebar').classList.toggle('compact', z !== 'menu');
     renderMenu();
   }
 
