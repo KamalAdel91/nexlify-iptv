@@ -28,14 +28,34 @@ call ares-package app -o dist
 if errorlevel 1 exit /b 1
 
 for %%f in (dist\*.ipk) do set IPK=%%f
+set LOG=%TEMP%\nexlify-install.log
+
+rem ares-* tools can exit with code 0 even on failure, so also look for "ERR!" in their output
+echo [*] Checking the connection to the TV ...
+call ares-device --device tv --system-info > "%LOG%" 2>&1
+findstr /c:"ERR!" "%LOG%" >nul
+if not errorlevel 1 goto :noconnect
+
 echo [*] Installing %IPK% on the TV ...
-call ares-install --device tv "%IPK%"
-if errorlevel 1 (
-  echo [X] Install failed. Make sure the TV is on, Developer Mode is active, and the PC is on the same network.
+call ares-install --device tv "%IPK%" > "%LOG%" 2>&1
+type "%LOG%"
+findstr /c:"ERR!" "%LOG%" >nul
+if not errorlevel 1 (
+  echo [X] Install failed.
   exit /b 1
 )
 
 echo [*] Launching ...
 call ares-launch --device tv com.homeiptv.player
 echo [OK] Done.
-endlocal
+exit /b 0
+
+:noconnect
+type "%LOG%"
+echo.
+echo [X] Cannot reach the TV. Check that:
+echo     1. The TV is on and the Developer Mode app shows the same IP as before.
+echo        If the IP changed, run:  ares-setup-device -m tv -i "host=NEW_IP"
+echo     2. Developer Mode is still active (Remain Session is not expired).
+echo     3. The PC and the TV are on the same Wi-Fi network.
+exit /b 1
