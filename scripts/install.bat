@@ -1,6 +1,9 @@
 @echo off
-rem Packages the app and installs it on the TV registered as "tv" in ares-setup-device.
+rem Packages the app and installs it on a TV registered with ares-setup-device.
+rem Usage: install.bat [device]   (default device name: tv)
 setlocal
+set DEVICE=%~1
+if "%DEVICE%"=="" set DEVICE=tv
 chcp 65001 >nul
 cd /d "%~dp0.."
 
@@ -31,13 +34,13 @@ for %%f in (dist\*.ipk) do set IPK=%%f
 set LOG=%TEMP%\nexlify-install.log
 
 rem ares-* tools can exit with code 0 even on failure, so also look for "ERR!" in their output
-echo [*] Checking the connection to the TV ...
-call ares-device --device tv --system-info > "%LOG%" 2>&1
+echo [*] Checking the connection to "%DEVICE%" ...
+call ares-device --device %DEVICE% --system-info > "%LOG%" 2>&1
 findstr /c:"ERR!" "%LOG%" >nul
 if not errorlevel 1 goto :noconnect
 
 echo [*] Installing %IPK% on the TV ...
-call ares-install --device tv "%IPK%" > "%LOG%" 2>&1
+call ares-install --device %DEVICE% "%IPK%" > "%LOG%" 2>&1
 type "%LOG%"
 findstr /c:"ERR!" "%LOG%" >nul
 if not errorlevel 1 (
@@ -46,7 +49,7 @@ if not errorlevel 1 (
 )
 
 echo [*] Launching ...
-call ares-launch --device tv com.homeiptv.player
+call ares-launch --device %DEVICE% com.homeiptv.player
 echo [OK] Done.
 exit /b 0
 
@@ -55,7 +58,7 @@ type "%LOG%"
 echo.
 echo [X] Cannot reach the TV. Check that:
 echo     1. The TV is on and the Developer Mode app shows the same IP as before.
-echo        If the IP changed, run:  ares-setup-device -m tv -i "host=NEW_IP"
+echo        If the IP changed, run:  ares-setup-device -m %DEVICE% -i "host=NEW_IP"
 echo     2. Developer Mode is still active (Remain Session is not expired).
 echo     3. The PC and the TV are on the same Wi-Fi network.
 exit /b 1

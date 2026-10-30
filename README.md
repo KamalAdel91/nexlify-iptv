@@ -78,6 +78,39 @@ scripts\install.bat
 
 ---
 
+## تثبيت التطبيق على شاشة LG تانية (شاشات العيلة)
+
+**أسرع طريقة:**
+1. على الشاشة الجديدة: ثبّت **Developer Mode** من LG Content Store، وادخل بنفس حساب المطوّر بتاعك. فعّل **Dev Mode Status**، وبعد الريستارت فعّل **Key Server**.
+2. على الكمبيوتر، والكمبيوتر على نفس شبكة الشاشة دي:
+   ```
+   scripts\setup-new-tv.bat
+   ```
+   - هيسألك على اسم للشاشة (زي `bedroom`) وعلى الـ IP، ولما يطلب الـ Passphrase اكتبه.
+   - بعدها بيثبّت التطبيق ويطبعلك الـ token بتاع الشاشة.
+3. ضيف الـ token في سطر جديد في الـ secret اللي اسمه `LG_DEVMODE_TOKENS` على GitHub.
+
+**عشان تحدّث شاشة معينة بعد كده:** `scripts\install.bat bedroom`. ولو مااكتبتش اسم، السكريبت بيستخدم الشاشة الأولى `tv`.
+
+**من غير أوامر خالص:** حمّل برنامج **webOS Dev Manager** (https://github.com/webosbrew/dev-manager-desktop/releases):
+1. دوس **Add Device**، واكتب الـ IP والـ Passphrase.
+2. اسحب ملف `.ipk` جوه البرنامج.
+
+ملف الـ `.ipk` بتلاقيه في فولدر `dist` بعد أي تشغيل لـ `install.bat`، أو في صفحة **Releases** على GitHub بعد ما تفعّل الملفات اللي في القسم اللي جاي.
+
+## تفعيل ملفات GitHub الإضافية (مرة واحدة)
+
+في فولدر `extras/workflows` فيه ملفين جاهزين:
+- **`build-ipk.yml`**: بيعمل ملف `.ipk` أوتوماتيك مع كل تحديث، وبيحطه في صفحة **Releases**.
+- **`extend-devmode.yml`**: بيجدد Developer Mode كل يوم **لكل الشاشات** اللي في `LG_DEVMODE_TOKENS`، كل token في سطر. ولسه بيقرا كمان الـ secret القديم `LG_DEVMODE_TOKEN`.
+
+**عشان تفعّلهم من موقع GitHub:**
+1. افتح الملف، ودوس على ✏️ (Edit).
+2. غيّر مكانه في خانة الاسم من `extras/workflows/` لـ `.github/workflows/`.
+3. دوس **Commit changes**.
+
+بالنسبة لـ `extend-devmode.yml`: الملف القديم اللي بنفس الاسم في `.github/workflows` امسحه الأول أو عدّل محتواه.
+
 ## تحديث التطبيق لنسخة جديدة
 
 1. نزّل آخر نسخة من GitHub: **Code ← Download ZIP**، وفكّها مكان القديمة. ولو عامل clone، اعمل `git pull`.
