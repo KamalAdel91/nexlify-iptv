@@ -1,29 +1,57 @@
 name: Extend LG Developer Mode
 
 # LG removes Developer Mode apps when the session runs out (50 hours).
-# This resets the timer once a day, even when the PC is off.
+# This resets the timer once a day for every TV, even when the PC is off.
+# Secret LG_DEVMODE_TOKENS: one token per line (one line per TV).
+# The older single-TV secret LG_DEVMODE_TOKEN is still read too.
 on:
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   extend:
     runs-on: ubuntu-latest
     steps:
-      - name: Reset Developer Mode session
+      - uses: actions/checkout@v4
+
+      # GitHub pauses scheduled workflows in public repos after 60 days without
+      # activity, which would stop the daily extension. An empty commit every
+      # 45 quiet days keeps the schedule running.
+      - name: Keep the schedule active
+        run: |
+          last=$(git log -1 --format=%ct)
+          if [ $(( $(date +%s) - last )) -gt $(( 45 * 86400 )) ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "Keep scheduled workflows active"
+            git push
+          fi
+
+      - name: Reset Developer Mode sessions
         env:
+          TOKENS: ${{ secrets.LG_DEVMODE_TOKENS }}
           TOKEN: ${{ secrets.LG_DEVMODE_TOKEN }}
         run: |
-          if [ -z "$TOKEN" ]; then
-            echo "::error::Add the LG_DEVMODE_TOKEN secret first (Settings > Secrets and variables > Actions)."
+          printf '%s\n%s\n' "$TOKENS" "$TOKEN" | tr ',' '\n' | tr -d ' \r' | sed '/^$/d' | sort -u > tokens.txt
+          if [ ! -s tokens.txt ]; then
+            echo "::error::Add the LG_DEVMODE_TOKENS secret first (Settings > Secrets and variables > Actions)."
             exit 1
           fi
-          code=$(curl -sS -o response.txt -w '%{http_code}' \
-            "https://developer.lge.com/secure/ResetDevModeSession.dev?sessionToken=${TOKEN}")
-          echo "HTTP $code"
-          cat response.txt; echo
-          if [ "$code" != "200" ] || grep -qi '"result" *: *"fail' response.txt; then
-            echo "::error::LG did not accept the token. Get a new one with scripts/get-devmode-token.bat."
-            exit 1
-          fi
+          failed=0; n=0
+          while read -r tok; do
+            n=$((n + 1))
+            code=$(curl -sS -o response.txt -w '%{http_code}' \
+              "https://developer.lge.com/secure/ResetDevModeSession.dev?sessionToken=${tok}" || echo 000)
+            if [ "$code" != "200" ] || grep -qi '"result" *: *"fail' response.txt; then
+              echo "::error::TV #$n: LG did not accept the token (HTTP $code). Get a new one with scripts/get-devmode-token.bat."
+              failed=1
+            else
+              echo "TV #$n: extended"
+            fi
+          done < tokens.txt
+          rm -f tokens.txt response.txt
+          exit $failed
