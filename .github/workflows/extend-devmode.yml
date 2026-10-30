@@ -1,0 +1,29 @@
+name: Extend LG Developer Mode
+
+# LG removes Developer Mode apps when the session runs out (50 hours).
+# This resets the timer once a day, even when the PC is off.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  extend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reset Developer Mode session
+        env:
+          TOKEN: ${{ secrets.LG_DEVMODE_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Add the LG_DEVMODE_TOKEN secret first (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          code=$(curl -sS -o response.txt -w '%{http_code}' \
+            "https://developer.lge.com/secure/ResetDevModeSession.dev?sessionToken=${TOKEN}")
+          echo "HTTP $code"
+          cat response.txt; echo
+          if [ "$code" != "200" ] || grep -qi '"result" *: *"fail' response.txt; then
+            echo "::error::LG did not accept the token. Get a new one with scripts/get-devmode-token.bat."
+            exit 1
+          fi
