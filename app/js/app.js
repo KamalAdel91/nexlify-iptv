@@ -2,71 +2,117 @@
 (function () {
   'use strict';
 
-  var K = Util.KEY, $ = Util.$, el = Util.el, show = Util.show, store = Util.store;
+  var K = Util.KEY, $ = Util.$, el = Util.el, show = Util.show, store = Util.store, t = I18n.t;
 
-  // The UI is right-to-left: the "deeper" column is to the left.
-  var NEXT = K.LEFT, PREV = K.RIGHT;
+  // "Next" is the arrow that moves deeper into the layout: left in Arabic (RTL), right in English.
+  var NEXT, PREV;
+  function applyDir() {
+    NEXT = I18n.rtl() ? K.LEFT : K.RIGHT;
+    PREV = I18n.rtl() ? K.RIGHT : K.LEFT;
+  }
 
-  var MENU = [
-    { id: 'live', label: 'القنوات' },
-    { id: 'vod', label: 'الأفلام' },
-    { id: 'series', label: 'المسلسلات' },
-    { id: 'fav', label: 'المفضلة' },
-    { id: 'search', label: 'بحث' },
-    { id: 'settings', label: 'الإعدادات' }
-  ];
-  var KIND_LABEL = { live: 'قناة', vod: 'فيلم', series: 'مسلسل' };
+  var ICONS = {
+    live: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M17 2l-5 5-5-5"/>',
+    vod: '<rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 9h5M2 15h5M17 9h5M17 15h5"/>',
+    series: '<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>',
+    fav: '<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+    settings: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>'
+  };
+  var MENU = ['live', 'vod', 'series', 'fav', 'search', 'settings'];
 
   var api = null, account = null;
   var screen = 'login';
-  var zone = 'menu';           // browse: menu | cats | items | search ; series: seasons | episodes
+  var zone = 'menu';           // browse: menu | cats | items | search ; series: seasons | episodes ; details: actions
   var menuIndex = 0, section = null;
   var data = {};               // kind -> { cats, byCat, all }
   var catList, rowList, gridList, itemList;  // itemList is whichever of rowList/gridList is showing
   var seasonList, episodeList, zapList;
-  var seriesCtx = null;        // { series, seasons, episodes }
-  var play = null;             // { kind, list, index, item, triedTs, episodes }
+  var seriesCtx = null;        // { item, eps }
+  var detailsCtx = null;       // { item, actions, index }
+  var play = null;             // current playback context
   var returnScreen = 'browse';
   var exitArmed = 0;
 
-  /* ---------------- Favorites & positions ---------------- */
+  /* ---------------- Saved state: favorites, recents, positions ---------------- */
 
   function itemId(it) { return it.t === 'series' ? it.s.series_id : it.s.stream_id; }
-  function favKey(it) { return it.t + ':' + itemId(it); }
 
-  var favs = store.get('favs', []);
-  function isFav(it) {
-    var k = favKey(it);
-    for (var i = 0; i < favs.length; i++) if (favs[i].t + ':' + favs[i].id === k) return true;
-    return false;
-  }
-  function toggleFav(it) {
-    if (!it || !KIND_LABEL[it.t]) return;
-    var k = favKey(it);
-    var before = favs.length;
-    favs = favs.filter(function (f) { return f.t + ':' + f.id !== k; });
-    if (favs.length === before) {
-      favs.push({ t: it.t, id: itemId(it), s: snapshot(it) });
-      Util.toast('⭐ اتضافت للمفضلة: ' + it.s.name);
-    } else {
-      Util.toast('اتشالت من المفضلة: ' + it.s.name);
-    }
-    store.set('favs', favs);
-    if (itemList) itemList.refresh();
-    if (section === 'fav' && screen === 'browse') openSection('fav', true);
-  }
-  function snapshot(it) {
-    var s = it.s;
+  function snapshot(s) {
     return {
       name: s.name, num: s.num, stream_id: s.stream_id, series_id: s.series_id,
       stream_icon: s.stream_icon, cover: s.cover, container_extension: s.container_extension,
-      epg_channel_id: s.epg_channel_id
+      rating: s.rating, category_id: s.category_id
     };
+  }
+
+  function findIn(list, kind, id) {
+    for (var i = 0; i < list.length; i++) if (list[i].t === kind && String(list[i].id) === String(id)) return i;
+    return -1;
+  }
+
+  // Keeps a most-recent-first list of { t, id, s } in storage
+  function touch(key, kind, s, extra, max) {
+    var list = store.get(key, []);
+    var id = kind === 'series' ? s.series_id : s.stream_id;
+    var i = findIn(list, kind, id);
+    if (i >= 0) list.splice(i, 1);
+    var entry = { t: kind, id: id, s: snapshot(s) };
+    if (extra) Object.keys(extra).forEach(function (k) { entry[k] = extra[k]; });
+    list.unshift(entry);
+    store.set(key, list.slice(0, max || 30));
+  }
+
+  function drop(key, kind, id) {
+    var list = store.get(key, []);
+    var i = findIn(list, kind, id);
+    if (i >= 0) { list.splice(i, 1); store.set(key, list); }
+  }
+
+  var favs = store.get('favs', []);
+  function isFav(it) { return findIn(favs, it.t, itemId(it)) >= 0; }
+
+  function toggleFav(it) {
+    if (!it || ['live', 'vod', 'series'].indexOf(it.t) < 0) return;
+    var i = findIn(favs, it.t, itemId(it));
+    if (i >= 0) {
+      favs.splice(i, 1);
+      Util.toast('☆  ' + t('fav_removed', { name: it.s.name }));
+    } else {
+      favs.push({ t: it.t, id: itemId(it), s: snapshot(it.s) });
+      Util.toast('★  ' + t('fav_added', { name: it.s.name }));
+    }
+    store.set('favs', favs);
+    if (screen === 'browse' && section === 'fav') openSection('fav', true);
+    else if (itemList) itemList.refresh();
+    if (screen === 'details') renderActions();
   }
 
   function posKey(kind, id) { return 'pos.' + kind + '.' + id; }
 
+  function continuePct(kind, id) {
+    var list = store.get('continue', []), i = findIn(list, kind, id);
+    return i >= 0 ? (list[i].pct || 0) : 0;
+  }
+
   /* ---------------- Rendering ---------------- */
+
+  function initials(name) {
+    return String(name || '?').replace(/^[^0-9A-Za-z؀-ۿ]+/, '').slice(0, 2).toUpperCase() || '?';
+  }
+
+  function logoBox(src, name, cls) {
+    var box = el('div', cls);
+    if (src) {
+      var img = el('img');
+      img.onerror = function () { box.innerHTML = ''; box.appendChild(el('span', 'ph', initials(name))); };
+      img.src = src;
+      box.appendChild(img);
+    } else {
+      box.appendChild(el('span', 'ph', initials(name)));
+    }
+    return box;
+  }
 
   function renderRow(it) {
     var row = el('div', 'row');
@@ -76,56 +122,139 @@
       return row;
     }
     if (it.t === 'cat') {
-      row.appendChild(el('span', 'name', it.name));
+      row.appendChild(el('span', 'name', it.key ? t(it.key) : it.name));
       row.appendChild(el('span', 'count', String(it.count)));
       return row;
     }
     if (it.t === 'season') {
-      row.appendChild(el('span', 'name', 'الموسم ' + it.season));
+      row.appendChild(el('span', 'name', t('season', { n: it.season })));
       row.appendChild(el('span', 'count', String(it.count)));
       return row;
     }
     if (it.t === 'episode') {
       var ep = it.s;
       row.appendChild(el('span', 'num', String(ep.episode_num || '')));
-      row.appendChild(el('span', 'name', ep.title || ('الحلقة ' + ep.episode_num)));
-      if (store.get(posKey('episode', ep.id), 0)) row.appendChild(el('span', 'count', '▶ مكمّل'));
+      row.appendChild(el('span', 'name', ep.title || t('episode', { n: ep.episode_num })));
+      if (store.get(posKey('episode', ep.id), 0)) row.appendChild(el('span', 'tag', t('resume_badge')));
       return row;
     }
     var s = it.s;
     if (it.t === 'live') row.appendChild(el('span', 'num', s.num ? String(s.num) : ''));
-    var icon = s.stream_icon || s.cover;
-    if (icon) {
-      var img = el('img', 'logo');
-      img.onerror = function () { img.style.visibility = 'hidden'; };
-      img.src = icon;
-      row.appendChild(img);
-    }
+    row.appendChild(logoBox(s.stream_icon || s.cover, s.name, 'logo'));
     row.appendChild(el('span', 'name', s.name));
-    if (section === 'fav' || section === 'search') row.appendChild(el('span', 'tag', KIND_LABEL[it.t]));
+    if (section === 'fav' || section === 'search') row.appendChild(el('span', 'tag', t('kind_' + it.t)));
     if (isFav(it)) row.appendChild(el('span', 'fav-star', '★'));
-    if (play && play.item && play.kind === 'live' && it.t === 'live' && it.s.stream_id === play.item.s.stream_id) {
+    if (play && play.kind === 'live' && it.t === 'live' && String(it.s.stream_id) === String(play.item.s.stream_id)) {
       row.classList.add('current');
     }
     return row;
   }
 
+  function cssUrl(u) { return 'url("' + String(u).replace(/"/g, '%22') + '")'; }
+
   function renderCard(it) {
-    var card = el('div', 'card');
-    var poster = el('div', 'poster');
-    var icon = it.s.stream_icon || it.s.cover;
-    if (icon) poster.style.backgroundImage = 'url("' + String(icon).replace(/"/g, '%22') + '")';
-    else poster.textContent = '🎬';
+    var s = it.s, card = el('div', 'card'), poster = el('div', 'poster');
+    var icon = s.stream_icon || s.cover;
+    if (icon) poster.style.backgroundImage = cssUrl(icon);
+    else {
+      var ph = el('div', 'ph');
+      ph.innerHTML = '<svg viewBox="0 0 24 24">' + ICONS[it.t === 'series' ? 'series' : 'vod'] + '</svg>';
+      poster.appendChild(ph);
+    }
+    var rating = parseFloat(s.rating);
+    if (rating > 0) poster.appendChild(el('div', 'rating', '★ ' + (Math.round(rating * 10) / 10)));
+    if (isFav(it)) poster.appendChild(el('div', 'fav', '★'));
+    var shade = el('div', 'shade');
+    shade.appendChild(el('div', 'title', s.name));
+    poster.appendChild(shade);
+    var pct = continuePct(it.t, itemId(it));
+    if (pct) {
+      var line = el('div', 'progress-line'), fill = el('div');
+      fill.style.width = Math.round(pct * 100) + '%';
+      line.appendChild(fill);
+      poster.appendChild(line);
+    }
     card.appendChild(poster);
-    card.appendChild(el('div', 'title', (isFav(it) ? '★ ' : '') + it.s.name));
     return card;
   }
+
+  /* ---------------- Clock & EPG ---------------- */
+
+  function tick() {
+    var now = new Date(), m = now.getMinutes();
+    var hhmm = now.getHours() + ':' + (m < 10 ? '0' : '') + m;
+    $('clock').textContent = hhmm;
+    $('osd-clock').textContent = hhmm;
+    $('date').textContent = now.toLocaleDateString(I18n.locale(), { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
+  function fmtDate(ts) {
+    return new Date(parseInt(ts, 10) * 1000).toLocaleDateString(I18n.locale(), { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  var epgCache = {};
+  function getEpg(id) {
+    var c = epgCache[id];
+    if (c && Date.now() - c.at < 300000) return Promise.resolve(c.list);
+    return api.shortEpg(id).then(function (list) {
+      epgCache[id] = { at: Date.now(), list: list };
+      return list;
+    });
+  }
+
+  // Fills a now/next block: { now, bar, next } element ids
+  function fillEpg(ids, list) {
+    var now = list[0], next = list[1];
+    if (!now) {
+      $(ids.now).textContent = t('no_epg');
+      $(ids.bar).style.width = '0';
+      $(ids.next).textContent = '';
+      return;
+    }
+    var start = parseInt(now.start_timestamp, 10), stop = parseInt(now.stop_timestamp, 10);
+    var pct = stop > start ? (Date.now() / 1000 - start) / (stop - start) : 0;
+    // Programme titles can be in either language, so isolate them from the times around them
+    var nowBox = $(ids.now);
+    nowBox.innerHTML = '';
+    nowBox.appendChild(el('bdi', '', Util.b64(now.title)));
+    nowBox.appendChild(el('span', 'time', Util.clock(start) + ' – ' + Util.clock(stop)));
+    $(ids.bar).style.width = Math.max(0, Math.min(1, pct)) * 100 + '%';
+    var nextBox = $(ids.next);
+    nextBox.innerHTML = '';
+    if (next) {
+      nextBox.appendChild(el('span', '', t('next') + ': '));
+      nextBox.appendChild(el('bdi', '', Util.b64(next.title)));
+      nextBox.appendChild(el('span', 'time', Util.clock(next.start_timestamp)));
+    }
+  }
+
+  var PV = { now: 'pv-now', bar: 'pv-bar', next: 'pv-next' };
+  var OSD = { now: 'osd-now', bar: 'osd-now-bar', next: 'osd-next' };
+
+  var previewFor = null;
+  var updatePreview = Util.debounce(function () {
+    var it = itemList && itemList.current();
+    if (section !== 'live' || !it || it.t !== 'live') { show($('preview'), false); return; }
+    show($('preview'), true);
+    var box = $('pv-logo').parentNode;
+    var fresh = logoBox(it.s.stream_icon, it.s.name, 'pv-logo');
+    fresh.firstChild.id = 'pv-logo';
+    box.parentNode.replaceChild(fresh, box);
+    $('pv-name').textContent = it.s.name;
+    fillEpg(PV, []);
+    $('pv-now').textContent = '…';
+    var id = it.s.stream_id;
+    previewFor = id;
+    getEpg(id).then(function (list) { if (previewFor === id) fillEpg(PV, list); }, function () {
+      if (previewFor === id) fillEpg(PV, []);
+    });
+  }, 300);
 
   /* ---------------- Data ---------------- */
 
   function loadKind(kind) {
     if (data[kind]) return Promise.resolve(data[kind]);
-    Util.loading(true, { live: 'بنحمّل القنوات...', vod: 'بنحمّل الأفلام...', series: 'بنحمّل المسلسلات...' }[kind]);
+    Util.loading(true, t('loading_' + kind));
     return Promise.all([api.categories(kind), api.streams(kind)]).then(function (r) {
       var cats = r[0], streams = r[1];
       var byCat = {}, all = [];
@@ -138,7 +267,7 @@
         var c = String(s.category_id);
         (byCat[c] = byCat[c] || []).push(it);
       });
-      var catItems = [{ t: 'cat', id: '*', name: 'الكل', count: all.length }];
+      var catItems = [];
       cats.forEach(function (c) {
         var list = byCat[String(c.category_id)];
         if (list && list.length) catItems.push({ t: 'cat', id: String(c.category_id), name: c.category_name, count: list.length });
@@ -148,9 +277,21 @@
       return data[kind];
     }, function (err) {
       Util.loading(false);
-      Util.toast('تعذّر تحميل البيانات من السيرفر. جرّب تاني.', 4000);
+      Util.toast(t('err_load'), 4000);
       throw err;
     });
+  }
+
+  function savedItems(key, kind) {
+    return store.get(key, []).filter(function (e) { return e.t === kind; })
+      .map(function (e) { return { t: e.t, s: e.s }; });
+  }
+
+  // Built-in categories shown above the provider's own
+  function specialItems(kind, id) {
+    if (id === 'recent') return savedItems('recentLive', 'live');
+    if (id === 'continue') return savedItems('continue', kind);
+    return [];
   }
 
   /* ---------------- Browse screen ---------------- */
@@ -158,20 +299,22 @@
   function buildMenu() {
     var nav = $('menu');
     nav.innerHTML = '';
-    MENU.forEach(function (m, i) {
-      var n = el('div', 'menu-item', m.label);
+    MENU.forEach(function (id, i) {
+      var n = el('div', 'menu-item');
+      n.innerHTML = '<svg viewBox="0 0 24 24">' + ICONS[id] + '</svg>';
+      n.appendChild(el('span', '', t('menu_' + id)));
       n.addEventListener('click', function () { menuIndex = i; renderMenu(); enterSection(); });
       n.addEventListener('mouseover', function () { setZone('menu'); menuIndex = i; renderMenu(); });
       nav.appendChild(n);
     });
+    renderMenu();
   }
 
   function renderMenu() {
     var nodes = $('menu').children;
     for (var i = 0; i < nodes.length; i++) {
-      nodes[i].classList.toggle('focused', i === menuIndex);
       nodes[i].classList.toggle('zone-on', zone === 'menu' && i === menuIndex);
-      nodes[i].classList.toggle('selected', MENU[i].id === section);
+      nodes[i].classList.toggle('selected', MENU[i] === section);
     }
   }
 
@@ -198,18 +341,22 @@
     show($('items-empty'), !items.length && !!emptyText);
     $('items-empty').textContent = emptyText || '';
     itemList.setItems(items, 0);
+    updatePreview();
   }
 
   function showCategory(cat) {
     var d = data[section];
     if (!d || !cat) return;
-    var items = cat.id === '*' ? d.all : (d.byCat[cat.id] || []);
-    setItems(items, cat.name + ' (' + items.length + ')', 'مفيش حاجة هنا');
+    var items;
+    if (cat.id === '*') items = d.all;
+    else if (cat.key) items = specialItems(section, cat.id);
+    else items = d.byCat[cat.id] || [];
+    setItems(items, (cat.key ? t(cat.key) : cat.name) + '  ·  ' + items.length, t('empty'));
     store.set('cat.' + section, cat.id);
   }
 
   function enterSection() {
-    var id = MENU[menuIndex].id;
+    var id = MENU[menuIndex];
     openSection(id).then(function () {
       if (id === 'search') setZone('search');
       else if (id === 'live' || id === 'vod' || id === 'series') setZone('cats');
@@ -220,38 +367,45 @@
   function openSection(id, keepIndex) {
     section = id;
     renderMenu();
+    $('section-title').textContent = t('menu_' + id);
     var columns = id === 'live' || id === 'vod' || id === 'series';
     show($('cats'), columns);
     show($('search-input'), id === 'search');
+    show($('preview'), false);
     useGrid(id === 'vod' || id === 'series');
 
     if (columns) {
-      $('cats-title').textContent = MENU[menuIndex].label;
       catList.setItems([], 0);
       setItems([], '');
       return loadKind(id).then(function (d) {
         if (section !== id) return;
+        var cats = [{ t: 'cat', id: '*', key: 'all', count: d.all.length }];
+        var specialId = id === 'live' ? 'recent' : 'continue';
+        var special = specialItems(id, specialId);
+        if (special.length) cats.push({ t: 'cat', id: specialId, key: specialId, count: special.length });
+        cats = cats.concat(d.cats);
         var saved = store.get('cat.' + id, '*'), idx = 0;
-        d.cats.forEach(function (c, i) { if (c.id === saved) idx = i; });
-        catList.setItems(d.cats, idx);
-        showCategory(d.cats[idx]);
+        cats.forEach(function (c, i) { if (c.id === saved) idx = i; });
+        catList.setItems(cats, idx);
+        showCategory(cats[idx]);
       }, function () {});
     }
     if (id === 'fav') {
       var prev = keepIndex ? itemList.index : 0;
       var items = favs.map(function (f) { return { t: f.t, s: f.s }; });
-      setItems(items, 'المفضلة', 'لسه مفيش حاجة في المفضلة. اضغط OK مطوّل (أو الزرار الأصفر) على أي قناة أو فيلم أو مسلسل عشان تضيفه.');
+      setItems(items, items.length ? String(items.length) : '', t('fav_empty'));
       if (keepIndex) itemList.setIndex(prev, true);
       return Promise.resolve();
     }
     if (id === 'search') {
-      setItems([], 'بحث', 'اكتب في الخانة اللي فوق');
+      setItems([], '', t('search_hint'));
       return loadKind('live').then(function () { return loadKind('vod'); })
         .then(function () { return loadKind('series'); })
         .then(function () { runSearch(); }, function () {});
     }
     if (id === 'settings') {
-      setItems(settingsItems(), 'الإعدادات');
+      setItems(settingsItems(), '');
+      if (keepIndex) itemList.setIndex(keepIndex, true);
       return Promise.resolve();
     }
     return Promise.resolve();
@@ -259,7 +413,7 @@
 
   function runSearch() {
     var q = $('search-input').value.trim().toLowerCase();
-    if (q.length < 2) { setItems([], 'بحث', 'اكتب حرفين على الأقل'); return; }
+    if (q.length < 2) { setItems([], '', t('search_min')); return; }
     var out = [];
     ['live', 'vod', 'series'].forEach(function (kind) {
       var d = data[kind];
@@ -269,32 +423,44 @@
         if (name && String(name).toLowerCase().indexOf(q) !== -1) out.push(d.all[i]);
       }
     });
-    setItems(out, 'نتايج البحث (' + out.length + ')', 'مالقيناش حاجة بالاسم ده');
+    setItems(out, t('search_results', { n: out.length }), t('search_none'));
   }
 
   function settingsItems() {
     var fmt = store.get('liveFormat', 'm3u8');
     var u = (account && account.user_info) || {};
-    var exp = u.exp_date ? new Date(parseInt(u.exp_date, 10) * 1000).toLocaleDateString('ar-EG') : 'غير محدد';
     return [
-      { t: 'setting', id: 'format', label: 'صيغة البث المباشر', value: fmt === 'ts' ? 'TS' : 'HLS (m3u8)' },
-      { t: 'setting', id: 'reload', label: 'تحديث القوائم من السيرفر' },
-      { t: 'setting', id: 'info', label: 'الاشتراك ينتهي', value: exp },
-      { t: 'setting', id: 'info', label: 'عدد الأجهزة المسموح', value: String(u.max_connections || '-') },
-      { t: 'setting', id: 'info', label: 'السيرفر', value: api ? api.server : '' },
-      { t: 'setting', id: 'logout', label: 'تسجيل الخروج' }
+      { t: 'setting', id: 'lang', label: t('set_lang'), value: t('set_lang_value') },
+      { t: 'setting', id: 'format', label: t('set_format'), value: fmt === 'ts' ? 'TS' : 'HLS (m3u8)' },
+      { t: 'setting', id: 'reload', label: t('set_reload') },
+      { t: 'setting', id: 'info', label: t('set_exp'), value: u.exp_date ? fmtDate(u.exp_date) : t('unknown') },
+      { t: 'setting', id: 'info', label: t('set_conn'), value: String(u.max_connections || '-') },
+      { t: 'setting', id: 'info', label: t('set_server'), value: api ? api.server : '' },
+      { t: 'setting', id: 'logout', label: t('set_logout') }
     ];
   }
 
+  function switchLang() {
+    I18n.set(I18n.lang() === 'ar' ? 'en' : 'ar');
+    applyDir();
+    buildMenu();
+    tick();
+    showExpiry();
+    [catList, rowList, gridList, seasonList, episodeList, zapList].forEach(function (l) { l.refresh(); });
+  }
+
   function runSetting(it) {
-    if (it.id === 'format') {
+    var i = itemList.index;
+    if (it.id === 'lang') {
+      switchLang();
+      openSection('settings', i);
+    } else if (it.id === 'format') {
       store.set('liveFormat', store.get('liveFormat', 'm3u8') === 'ts' ? 'm3u8' : 'ts');
-      var i = itemList.index;
-      setItems(settingsItems(), 'الإعدادات');
-      itemList.setIndex(i, true);
+      openSection('settings', i);
     } else if (it.id === 'reload') {
       data = {};
-      Util.toast('هيتم تحميل القوائم من جديد لما تفتحها');
+      epgCache = {};
+      Util.toast(t('set_reload_done'));
     } else if (it.id === 'logout') {
       store.remove('creds');
       data = {};
@@ -310,7 +476,7 @@
       list.forEach(function (x, i) { if (x.t === 'live') { if (i === index) at = lives.length; lives.push(x); } });
       playLive(lives, at);
     } else if (it.t === 'vod') {
-      playVod({ kind: 'vod', item: it, url: api.movieUrl(it.s.stream_id, it.s.container_extension), id: it.s.stream_id, title: it.s.name, icon: it.s.stream_icon });
+      openDetails(it);
     } else if (it.t === 'series') {
       openSeries(it);
     } else if (it.t === 'setting') {
@@ -367,35 +533,147 @@
     var now = Date.now();
     if (now - exitArmed < 2500) { window.close(); return; }
     exitArmed = now;
-    Util.toast('اضغط رجوع تاني عشان تخرج من التطبيق');
+    Util.toast(t('exit_confirm'));
+  }
+
+  /* ---------------- Details (movies) ---------------- */
+
+  function metaLine(node, parts) {
+    node.innerHTML = '';
+    parts.forEach(function (p) {
+      if (!p) return;
+      var span = el('span', p.cls || '', p.text || p);
+      node.appendChild(span);
+    });
+  }
+
+  function yearOf(s) { var m = String(s || '').match(/\d{4}/); return m ? m[0] : ''; }
+
+  function durationText(info) {
+    var secs = parseInt(info.duration_secs, 10);
+    if (!secs && info.duration) {
+      var p = String(info.duration).split(':');
+      if (p.length === 3) secs = (+p[0]) * 3600 + (+p[1]) * 60 + (+p[2]);
+    }
+    if (!secs) return '';
+    var h = Math.floor(secs / 3600), m = Math.round(secs % 3600 / 60);
+    return h ? h + 'h ' + m + 'm' : t('minutes', { n: m });
+  }
+
+  function ratingPart(r) {
+    r = parseFloat(r);
+    return r > 0 ? { cls: 'star', text: '★ ' + (Math.round(r * 10) / 10) } : null;
+  }
+
+  function setHero(prefix, poster, backdrop) {
+    $(prefix + '-poster').style.backgroundImage = poster ? cssUrl(poster) : 'none';
+    $(prefix + '-bg').style.backgroundImage = (backdrop || poster) ? cssUrl(backdrop || poster) : 'none';
+  }
+
+  function firstBackdrop(info) {
+    var b = info.backdrop_path;
+    if (Array.isArray(b)) return b[0];
+    return b || '';
+  }
+
+  function openDetails(it) {
+    var s = it.s;
+    detailsCtx = { item: it, index: 0 };
+    $('d-title').textContent = s.name;
+    metaLine($('d-meta'), [ratingPart(s.rating)]);
+    $('d-plot').textContent = '';
+    $('d-credits').textContent = '';
+    setHero('d', s.stream_icon, '');
+    showScreen('details');
+    zone = 'actions';
+    renderActions();
+
+    var id = s.stream_id;
+    api.vodInfo(id).then(function (res) {
+      if (!detailsCtx || detailsCtx.item !== it) return;
+      var info = (res && res.info) || {};
+      if (res && res.movie_data && res.movie_data.container_extension) {
+        detailsCtx.ext = res.movie_data.container_extension;
+      }
+      metaLine($('d-meta'), [
+        yearOf(info.releasedate || info.release_date), durationText(info),
+        ratingPart(info.rating || s.rating), info.genre
+      ]);
+      $('d-plot').textContent = info.plot || info.description || '';
+      var credits = [];
+      if (info.director) credits.push(info.director);
+      if (info.cast || info.actors) credits.push(info.cast || info.actors);
+      $('d-credits').textContent = credits.join('  •  ');
+      setHero('d', info.movie_image || info.cover_big || s.stream_icon, firstBackdrop(info));
+    }, function () {});
+  }
+
+  function renderActions() {
+    if (!detailsCtx) return;
+    var it = detailsCtx.item, pos = store.get(posKey('vod', it.s.stream_id), 0);
+    var actions = pos
+      ? [{ id: 'resume', ic: '▶', label: t('resume', { time: Util.fmtTime(pos) }) }, { id: 'start', ic: '↺', label: t('start_over') }]
+      : [{ id: 'play', ic: '▶', label: t('play') }];
+    actions.push(isFav(it) ? { id: 'fav', ic: '★', label: t('remove_fav') } : { id: 'fav', ic: '☆', label: t('add_fav') });
+    detailsCtx.actions = actions;
+    detailsCtx.index = Math.min(detailsCtx.index, actions.length - 1);
+
+    var box = $('d-actions');
+    box.innerHTML = '';
+    actions.forEach(function (a, i) {
+      var b = el('div', 'action' + (i === detailsCtx.index ? ' focused' : ''));
+      b.appendChild(el('span', 'ic', a.ic));
+      b.appendChild(el('span', '', a.label));
+      b.addEventListener('click', function () { detailsCtx.index = i; runAction(); });
+      box.appendChild(b);
+    });
+  }
+
+  function runAction() {
+    var a = detailsCtx.actions[detailsCtx.index], s = detailsCtx.item.s;
+    if (a.id === 'fav') { toggleFav(detailsCtx.item); return; }
+    playVod({
+      kind: 'vod', item: detailsCtx.item, id: s.stream_id, title: s.name,
+      url: api.movieUrl(s.stream_id, detailsCtx.ext || s.container_extension),
+      fromStart: a.id === 'start'
+    });
+  }
+
+  function detailsKey(k) {
+    var n = detailsCtx.actions.length;
+    if (k === NEXT && detailsCtx.index < n - 1) { detailsCtx.index++; renderActions(); }
+    else if (k === PREV && detailsCtx.index > 0) { detailsCtx.index--; renderActions(); }
+    else if (k === K.ENTER) runAction();
+    else if (k === K.YELLOW) toggleFav(detailsCtx.item);
+    else if (k === K.BACK || k === K.ESC) { detailsCtx = null; showScreen('browse'); setZone('items'); }
   }
 
   /* ---------------- Series screen ---------------- */
 
   function openSeries(it) {
-    Util.loading(true, 'بنحمّل الحلقات...');
-    api.seriesInfo(it.s.series_id).then(function (info) {
+    Util.loading(true, t('loading_info'));
+    api.seriesInfo(it.s.series_id).then(function (res) {
       Util.loading(false);
-      var eps = (info && info.episodes) || {};
+      var eps = (res && res.episodes) || {};
       var seasons = Object.keys(eps).sort(function (a, b) { return a - b; }).map(function (n) {
         return { t: 'season', season: n, count: (eps[n] || []).length };
       });
-      if (!seasons.length) { Util.toast('مفيش حلقات متاحة للمسلسل ده'); return; }
-      var meta = (info && info.info) || {};
+      if (!seasons.length) { Util.toast(t('no_episodes')); return; }
+      var info = (res && res.info) || {};
       seriesCtx = { item: it, eps: eps };
-      $('series-name').textContent = it.s.name;
-      $('series-plot').textContent = meta.plot || '';
-      var cover = $('series-cover'), src = meta.cover || it.s.cover;
-      cover.style.visibility = src ? 'visible' : 'hidden';
-      cover.onerror = function () { cover.style.visibility = 'hidden'; };
-      if (src) cover.src = src; else cover.removeAttribute('src');
+      $('s-title').textContent = it.s.name;
+      metaLine($('s-meta'), [
+        yearOf(info.releaseDate || info.release_date), ratingPart(info.rating || it.s.rating), info.genre
+      ]);
+      $('s-plot').textContent = info.plot || '';
+      setHero('s', info.cover || it.s.cover, firstBackdrop(info));
       showScreen('series');
       seasonList.setItems(seasons, store.get('season.' + it.s.series_id, 0));
       showSeason(seasonList.current());
       setZone('episodes');
     }, function () {
       Util.loading(false);
-      Util.toast('تعذّر تحميل بيانات المسلسل');
+      Util.toast(t('err_series'));
     });
   }
 
@@ -403,17 +681,21 @@
     if (!season || !seriesCtx) return;
     store.set('season.' + seriesCtx.item.s.series_id, seasonList.index);
     var list = (seriesCtx.eps[season.season] || []).map(function (ep) { return { t: 'episode', s: ep }; });
-    episodeList.setItems(list, 0);
+    var last = store.get('lastEp.' + seriesCtx.item.s.series_id, null), at = 0;
+    list.forEach(function (x, i) { if (String(x.s.id) === String(last)) at = i; });
+    episodeList.setItems(list, at);
   }
 
   function playEpisode(index) {
     var it = episodeList.items[index];
     if (!it) return;
-    var ep = it.s;
+    var ep = it.s, series = seriesCtx.item;
+    store.set('lastEp.' + series.s.series_id, ep.id);
+    touch('continue', 'series', series.s);
     playVod({
-      kind: 'episode', item: seriesCtx.item, url: api.episodeUrl(ep.id, ep.container_extension), id: ep.id,
-      title: seriesCtx.item.s.name + ' • ' + (ep.title || ('الحلقة ' + ep.episode_num)),
-      icon: seriesCtx.item.s.cover, episodeIndex: index
+      kind: 'episode', item: series, url: api.episodeUrl(ep.id, ep.container_extension), id: ep.id,
+      title: series.s.name + '  ·  ' + (ep.title || t('episode', { n: ep.episode_num })),
+      episodeIndex: index
     });
   }
 
@@ -437,6 +719,7 @@
 
   function closeSeries() {
     showScreen('browse');
+    itemList.refresh();
     setZone('items');
   }
 
@@ -449,44 +732,42 @@
     if (ms !== 0) osdTimer = setTimeout(function () { show($('osd'), false); }, ms || 5000);
   }
 
+  function setOsdLogo(src, name) {
+    var box = $('osd-logo').parentNode;
+    var fresh = logoBox(src, name, 'osd-logo');
+    fresh.firstChild.id = 'osd-logo';
+    box.parentNode.replaceChild(fresh, box);
+    show(fresh, !!(src || name));
+  }
+
+  function enterPlayer() {
+    if (screen !== 'player') returnScreen = screen;
+    showScreen('player');
+    show($('pause-icon'), false);
+  }
+
   function playLive(list, index) {
     var it = list[index];
     if (!it) return;
-    returnScreen = screen === 'player' ? returnScreen : screen;
+    enterPlayer();
     play = { kind: 'live', list: list, index: index, item: it, triedTs: false };
-    showScreen('player');
     show($('osd-progress'), false);
+    show($('osd-live'), true);
     var useTs = store.get('liveFormat', 'm3u8') === 'ts';
     play.ts = useTs;
     Player.play(api.liveUrl(it.s.stream_id, useTs ? 'ts' : 'm3u8'), { live: true, ts: useTs });
-    store.set('lastLive', it.s.stream_id);
+    touch('recentLive', 'live', it.s, null, 20);
 
     $('osd-num').textContent = it.s.num || (index + 1);
     $('osd-title').textContent = it.s.name;
-    $('osd-epg').textContent = '';
-    setLogo(it.s.stream_icon);
+    setOsdLogo(it.s.stream_icon, it.s.name);
+    fillEpg(OSD, []);
+    $('osd-now').textContent = '…';
     showOsd();
-    loadEpg(it);
-  }
-
-  function setLogo(src) {
-    var logo = $('osd-logo');
-    logo.style.visibility = src ? 'visible' : 'hidden';
-    logo.onerror = function () { logo.style.visibility = 'hidden'; };
-    if (src) logo.src = src; else logo.removeAttribute('src');
-  }
-
-  var epgFor = null;
-  function loadEpg(it) {
     var id = it.s.stream_id;
-    epgFor = id;
-    api.shortEpg(id).then(function (list) {
-      if (epgFor !== id || !list.length) return;
-      var now = list[0], next = list[1];
-      var txt = 'دلوقتي: ' + Util.b64(now.title) + ' (' + Util.clock(now.start_timestamp) + ' - ' + Util.clock(now.stop_timestamp) + ')';
-      if (next) txt += '   •   بعدها: ' + Util.b64(next.title);
-      $('osd-epg').textContent = txt;
-    }, function () {});
+    getEpg(id).then(function (l) { if (play && play.item === it) fillEpg(OSD, l); }, function () {
+      if (play && play.item === it) fillEpg(OSD, []);
+    });
   }
 
   function zap(delta) {
@@ -496,16 +777,15 @@
   }
 
   function playVod(ctx) {
-    returnScreen = screen === 'player' ? returnScreen : screen;
+    enterPlayer();
     play = ctx;
-    showScreen('player');
-    var startAt = store.get(posKey(ctx.kind, ctx.id), 0);
+    var startAt = ctx.fromStart ? 0 : store.get(posKey(ctx.kind, ctx.id), 0);
     Player.play(ctx.url, { startAt: startAt });
-    if (startAt) Util.toast('هنكمّل من ' + Util.fmtTime(startAt));
+    if (startAt) Util.toast(t('resume_from', { time: Util.fmtTime(startAt) }));
     $('osd-num').textContent = '';
     $('osd-title').textContent = ctx.title;
-    $('osd-epg').textContent = '';
-    setLogo(null);
+    setOsdLogo(null, null);
+    show($('osd-live'), false);
     show($('osd-progress'), true);
     updateProgress();
     showOsd();
@@ -516,7 +796,7 @@
     if (!play || play.kind === 'live') return;
     var cur = Player.time(), dur = Player.duration();
     $('osd-cur').textContent = Util.fmtTime(cur);
-    $('osd-dur').textContent = Util.fmtTime(dur);
+    $('osd-dur').textContent = dur ? '-' + Util.fmtTime(dur - cur) : '0:00';
     $('osd-bar').style.width = dur ? (cur / dur * 100) + '%' : '0';
     if (Date.now() - lastSave > 10000) { lastSave = Date.now(); savePosition(); }
   }
@@ -524,8 +804,14 @@
   function savePosition() {
     if (!play || play.kind === 'live') return;
     var cur = Player.time(), dur = Player.duration(), key = posKey(play.kind, play.id);
-    if (dur && cur > 60 && cur < dur * 0.95) store.set(key, Math.floor(cur));
-    else if (dur && cur >= dur * 0.95) store.remove(key);
+    if (!dur) return;
+    if (cur > 60 && cur < dur * 0.95) {
+      store.set(key, Math.floor(cur));
+      if (play.kind === 'vod') touch('continue', 'vod', play.item.s, { pct: cur / dur });
+    } else if (cur >= dur * 0.95) {
+      store.remove(key);
+      if (play.kind === 'vod') drop('continue', 'vod', play.id);
+    }
   }
 
   function onPlayerError() {
@@ -534,16 +820,17 @@
       // Some providers only serve MPEG-TS: retry the same channel once that way
       play.triedTs = true;
       play.ts = true;
-      Util.toast('بنجرّب صيغة تانية للقناة...');
+      Util.toast(t('retry_format'));
       Player.play(api.liveUrl(play.item.s.stream_id, 'ts'), { live: true, ts: true });
       return;
     }
-    Util.toast(play.kind === 'live' ? 'القناة دي مش شغالة دلوقتي' : 'تعذّر تشغيل الفيديو', 4000);
+    Util.toast(play.kind === 'live' ? t('ch_down') : t('play_err'), 4000);
   }
 
   function onEnded() {
     if (!play || play.kind === 'live') return;
     store.remove(posKey(play.kind, play.id));
+    if (play.kind === 'vod') drop('continue', 'vod', play.id);
     if (play.kind === 'episode' && play.episodeIndex + 1 < episodeList.items.length) {
       episodeList.setIndex(play.episodeIndex + 1, true);
       playEpisode(play.episodeIndex + 1);
@@ -557,11 +844,12 @@
     Player.stop();
     show($('zap-list'), false);
     show($('osd'), false);
-    var wasEpisode = play && play.kind === 'episode';
     showScreen(returnScreen);
     if (returnScreen === 'series') {
-      if (wasEpisode) episodeList.refresh();
+      episodeList.refresh();
       setZone('episodes');
+    } else if (returnScreen === 'details') {
+      renderActions();
     } else {
       itemList.refresh();
       setZone('items');
@@ -582,12 +870,12 @@
       var idx = -1;
       play.list.forEach(function (it, i) { if (idx < 0 && parseInt(it.s.num, 10) === n) idx = i; });
       if (idx < 0 && n >= 1 && n <= play.list.length) idx = n - 1;
-      if (idx >= 0) playLive(play.list, idx); else Util.toast('مفيش قناة رقم ' + n);
+      if (idx >= 0) playLive(play.list, idx); else Util.toast(t('no_channel', { n: n }));
     }, 1500);
   }
 
   function openZap() {
-    $('zap-title').textContent = 'القنوات (' + play.list.length + ')';
+    $('zap-title').textContent = t('channels_n', { n: play.list.length });
     show($('zap-list'), true);
     zapList.setItems(play.list, play.index);
     zapList.setActive(true);
@@ -605,7 +893,7 @@
         else if (k === K.CH_UP) zapList.page(-1);
         else if (k === K.CH_DOWN) zapList.page(1);
         else if (k === K.ENTER) { show($('zap-list'), false); playLive(play.list, zapList.index); }
-        else if (k === K.YELLOW) toggleFav(zapList.current());
+        else if (k === K.YELLOW) { toggleFav(zapList.current()); zapList.refresh(); }
         else if (k === K.BACK || k === K.ESC || k === PREV) show($('zap-list'), false);
         return;
       }
@@ -622,6 +910,7 @@
     // Movies and episodes: the timeline runs left-to-right, so RIGHT always means forward
     if (k === K.ENTER || k === K.PLAY_PAUSE || k === K.PLAY || k === K.PAUSE) {
       var paused = Player.togglePause();
+      show($('pause-icon'), paused);
       showOsd(paused ? 0 : 4000);
     } else if (k === K.RIGHT) { Player.seek(10); showOsd(); }
     else if (k === K.LEFT) { Player.seek(-10); showOsd(); }
@@ -635,7 +924,7 @@
 
   /* ---------------- Login ---------------- */
 
-  var loginFields = ['in-server', 'in-user', 'in-pass', 'btn-login'];
+  var loginFields = ['in-server', 'in-user', 'in-pass', 'btn-login', 'btn-lang'];
   var loginIndex = 0;
 
   function showLogin(error) {
@@ -657,7 +946,7 @@
   function doLogin() {
     var creds = { server: $('in-server').value, username: $('in-user').value, password: $('in-pass').value };
     if (!creds.server.trim() || !creds.username.trim() || !creds.password.trim()) {
-      $('login-error').textContent = 'كمّل كل الخانات الأول';
+      $('login-error').textContent = t('err_fields');
       return;
     }
     $('btn-login').blur();
@@ -666,24 +955,28 @@
 
   function connect(creds, fromForm) {
     var client = new Xtream(creds);
-    Util.loading(true, 'بنتصل بالسيرفر...');
+    Util.loading(true, t('connecting'));
     client.login().then(function (info) {
       Util.loading(false);
       api = client;
       account = info;
       store.set('creds', { server: client.server, username: client.username, password: client.password });
       data = {};
+      showExpiry();
       showScreen('browse');
       menuIndex = 0;
       openSection('live').then(function () { setZone('cats'); });
     }, function (err) {
       Util.loading(false);
-      var msg = err && err.message === 'auth'
-        ? 'اسم المستخدم أو كلمة السر غلط، أو الاشتراك منتهي'
-        : 'تعذّر الاتصال بالسيرفر. اتأكد من العنوان والنت.';
+      var msg = err && err.message === 'auth' ? t('err_auth') : t('err_connect');
       if (fromForm) $('login-error').textContent = msg;
       else showLogin(msg);
     });
+  }
+
+  function showExpiry() {
+    var u = (account && account.user_info) || {};
+    $('exp').textContent = u.exp_date ? t('expires', { date: fmtDate(u.exp_date) }) : '';
   }
 
   function loginKey(k, e) {
@@ -691,7 +984,8 @@
     else if (k === K.DOWN && loginIndex < loginFields.length - 1) { loginIndex++; focusLogin(); e.preventDefault(); }
     else if (k === K.ENTER) {
       e.preventDefault();
-      if (loginIndex === loginFields.length - 1) doLogin();
+      if (loginFields[loginIndex] === 'btn-login') doLogin();
+      else if (loginFields[loginIndex] === 'btn-lang') { switchLang(); focusLogin(); }
       else { loginIndex++; focusLogin(); }
     } else if (k === K.BACK) tryExit();
   }
@@ -700,7 +994,7 @@
 
   function showScreen(name) {
     screen = name;
-    ['login', 'browse', 'series', 'player'].forEach(function (s) { show($(s), s === name); });
+    ['login', 'browse', 'details', 'series', 'player'].forEach(function (s) { show($(s), s === name); });
     // Lists measure themselves, so redraw once their screen is visible
     if (name === 'browse') { catList.setIndex(catList.index, true); itemList.setIndex(itemList.index, true); }
     if (name === 'series') { seasonList.setIndex(seasonList.index, true); episodeList.setIndex(episodeList.index, true); }
@@ -708,6 +1002,7 @@
 
   // OK pressed and held = favorite; short press = select
   var enterTimer = null, enterLong = false;
+  function holdable() { return screen === 'browse' || screen === 'series'; }
 
   function onKeyDown(e) {
     var k = e.keyCode;
@@ -719,7 +1014,7 @@
     if (screen === 'browse' && zone === 'search' && k !== K.DOWN && k !== K.UP && k !== K.BACK && k !== K.ESC) return;
     e.preventDefault();
 
-    if (k === K.ENTER && (screen === 'browse' || screen === 'series')) {
+    if (k === K.ENTER && holdable()) {
       if (e.repeat || enterTimer) return;
       enterLong = false;
       enterTimer = setTimeout(function () {
@@ -734,8 +1029,7 @@
   }
 
   function onKeyUp(e) {
-    if (e.keyCode !== K.ENTER || !(screen === 'browse' || screen === 'series')) return;
-    if (zone === 'search') return;
+    if (e.keyCode !== K.ENTER || !holdable() || zone === 'search') return;
     if (enterTimer) {
       clearTimeout(enterTimer);
       enterTimer = null;
@@ -745,6 +1039,7 @@
 
   function dispatch(k) {
     if (screen === 'browse') { if (k === K.ENTER) browseSelect(); else browseKey(k); }
+    else if (screen === 'details') detailsKey(k);
     else if (screen === 'series') seriesKey(k);
     else if (screen === 'player') playerKey(k);
   }
@@ -752,6 +1047,9 @@
   /* ---------------- Init ---------------- */
 
   function init() {
+    applyDir();
+    I18n.apply();
+
     catList = new VList($('cats-list'), {
       rowHeight: 3.4,
       render: renderRow,
@@ -760,8 +1058,9 @@
       onHover: function () { setZone('cats'); }
     });
     rowList = new VList($('items-list'), {
-      rowHeight: 3.6,
+      rowHeight: 3.8,
       render: renderRow,
+      onFocus: updatePreview,
       onSelect: function (it, i) { setZone('items'); activate(it, rowList.items, i); },
       onHover: function () { setZone('items'); }
     });
@@ -787,7 +1086,7 @@
       onHover: function () { setZone('episodes'); }
     });
     zapList = new VList($('zap-items'), {
-      rowHeight: 3.6,
+      rowHeight: 3.8,
       render: renderRow,
       onSelect: function (it, i) { show($('zap-list'), false); playLive(play.list, i); }
     });
@@ -795,8 +1094,11 @@
     Player.init({ onError: onPlayerError, onEnded: onEnded, onTime: updateProgress });
 
     buildMenu();
+    tick();
+    setInterval(tick, 15000);
     $('search-input').addEventListener('input', Util.debounce(runSearch, 400));
     $('btn-login').addEventListener('click', doLogin);
+    $('btn-lang').addEventListener('click', function () { switchLang(); });
     loginFields.forEach(function (id, i) {
       $(id).addEventListener('focus', function () {
         loginIndex = i;

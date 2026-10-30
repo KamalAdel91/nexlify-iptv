@@ -111,6 +111,7 @@ VList.prototype.refresh = function () {
 
 VList.prototype.render = function () {
   var rowPx = this.rowPx(), cols = this.cols, vis = this.visibleRows();
+  var side = I18n.rtl() ? 'right' : 'left';
   var from = Math.max(0, (this.scrollRow - 1) * cols);
   var to = Math.min(this.items.length, (this.scrollRow + vis + 2) * cols);
   var keep = {}, i;
@@ -123,7 +124,7 @@ VList.prototype.render = function () {
       node.style.top = Math.floor(i / cols) * rowPx + 'px';
       node.style.height = rowPx + 'px';
       node.style.width = (100 / cols) + '%';
-      node.style.right = (i % cols) * (100 / cols) + '%';
+      node.style[side] = (i % cols) * (100 / cols) + '%';
       node.appendChild(this.opts.render(this.items[i], i));
       this.inner.appendChild(node);
     }

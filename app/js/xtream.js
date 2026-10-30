@@ -49,6 +49,10 @@ Xtream.prototype.seriesInfo = function (seriesId) {
   return this.api({ action: 'get_series_info', series_id: seriesId });
 };
 
+Xtream.prototype.vodInfo = function (vodId) {
+  return this.api({ action: 'get_vod_info', vod_id: vodId }, 20000);
+};
+
 Xtream.prototype.shortEpg = function (streamId) {
   return this.api({ action: 'get_short_epg', stream_id: streamId, limit: 2 }, 15000)
     .then(function (data) { return (data && data.epg_listings) || []; });

@@ -3,60 +3,108 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>IPTV Player</title>
+  <title>Nexlify</title>
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 
   <!-- Login -->
   <div id="login" class="screen hidden">
+    <div class="login-brand">
+      <div class="brand-mark big">N</div>
+      <div class="brand-name big">Nexlify</div>
+      <div class="brand-tag">IPTV Player</div>
+    </div>
     <div class="login-box">
-      <h1>تسجيل الدخول</h1>
-      <p class="muted">اكتب بيانات اشتراك Xtream مرة واحدة، وهتتحفظ على الشاشة.</p>
-      <label>السيرفر <span class="muted">(مثال: http://example.com:8080)</span></label>
+      <h1 data-i18n="login_title"></h1>
+      <p class="muted" data-i18n="login_sub"></p>
+      <label><span data-i18n="server"></span> <span class="muted small" data-i18n="server_hint"></span></label>
       <input id="in-server" class="field" type="url" dir="ltr" autocomplete="off" spellcheck="false">
-      <label>اسم المستخدم</label>
+      <label data-i18n="username"></label>
       <input id="in-user" class="field" type="text" dir="ltr" autocomplete="off" spellcheck="false">
-      <label>كلمة السر</label>
+      <label data-i18n="password"></label>
       <input id="in-pass" class="field" type="password" dir="ltr" autocomplete="off">
-      <button id="btn-login" class="field btn">دخول</button>
+      <button id="btn-login" class="field btn primary" data-i18n="login_btn"></button>
+      <button id="btn-lang" class="field btn ghost" data-i18n="lang_switch"></button>
       <div id="login-error" class="error"></div>
     </div>
   </div>
 
   <!-- Browse -->
   <div id="browse" class="screen hidden">
-    <nav id="menu"></nav>
-    <section id="cats" class="column">
-      <div class="col-title" id="cats-title"></div>
-      <div class="vlist" id="cats-list"></div>
-    </section>
-    <section id="items" class="column">
-      <div class="col-title" id="items-title"></div>
-      <input id="search-input" class="field hidden" type="text" placeholder="اكتب اسم قناة أو فيلم أو مسلسل..." autocomplete="off" spellcheck="false">
-      <div class="vlist" id="items-list"></div>
-      <div class="vlist hidden" id="items-grid"></div>
-      <div class="empty hidden" id="items-empty"></div>
-    </section>
-    <div id="hint" class="hint">OK: تشغيل &nbsp;•&nbsp; اضغط OK مطوّل أو الزرار الأصفر: مفضلة &nbsp;•&nbsp; رجوع: للخلف</div>
+    <aside id="sidebar">
+      <div class="brand"><div class="brand-mark">N</div><div class="brand-name">Nexlify</div></div>
+      <nav id="menu"></nav>
+      <div class="side-foot">
+        <div id="clock" class="clock"></div>
+        <div id="date" class="muted"></div>
+        <div id="exp" class="muted small"></div>
+      </div>
+    </aside>
+    <main id="main">
+      <header class="main-head">
+        <h1 id="section-title"></h1>
+        <div id="items-title" class="muted"></div>
+      </header>
+      <div class="main-body">
+        <section id="cats" class="column">
+          <div class="col-title" data-i18n="categories"></div>
+          <div class="vlist" id="cats-list"></div>
+        </section>
+        <section id="items" class="column">
+          <div id="preview" class="preview hidden">
+            <div class="pv-logo"><img id="pv-logo" alt=""></div>
+            <div class="pv-text">
+              <div id="pv-name" class="pv-name"></div>
+              <div class="pv-now"><span class="badge" data-i18n="now"></span><span id="pv-now"></span></div>
+              <div class="bar"><div id="pv-bar"></div></div>
+              <div class="muted pv-next"><span id="pv-next"></span></div>
+            </div>
+          </div>
+          <input id="search-input" class="field hidden" type="text" data-i18n-ph="search_ph" autocomplete="off" spellcheck="false">
+          <div class="vlist" id="items-list"></div>
+          <div class="vlist hidden" id="items-grid"></div>
+          <div class="empty hidden" id="items-empty"></div>
+        </section>
+      </div>
+      <div class="hint" data-i18n="hint_browse"></div>
+    </main>
+  </div>
+
+  <!-- Movie details -->
+  <div id="details" class="screen hidden">
+    <div class="hero-bg" id="d-bg"></div>
+    <div class="hero">
+      <div class="poster-lg" id="d-poster"></div>
+      <div class="hero-info">
+        <h1 id="d-title"></h1>
+        <div id="d-meta" class="meta"></div>
+        <p id="d-plot" class="plot"></p>
+        <div id="d-credits" class="credits muted"></div>
+        <div id="d-actions" class="actions"></div>
+      </div>
+    </div>
+    <div class="hint" data-i18n="hint_details"></div>
   </div>
 
   <!-- Series details -->
   <div id="series" class="screen hidden">
-    <div class="series-head">
-      <img id="series-cover" alt="">
-      <div>
-        <h1 id="series-name"></h1>
-        <p id="series-plot" class="muted"></p>
+    <div class="hero-bg" id="s-bg"></div>
+    <div class="hero small">
+      <div class="poster-lg" id="s-poster"></div>
+      <div class="hero-info">
+        <h1 id="s-title"></h1>
+        <div id="s-meta" class="meta"></div>
+        <p id="s-plot" class="plot"></p>
       </div>
     </div>
     <div class="series-body">
       <section class="column narrow">
-        <div class="col-title">المواسم</div>
+        <div class="col-title" data-i18n="seasons"></div>
         <div class="vlist" id="seasons-list"></div>
       </section>
       <section class="column">
-        <div class="col-title">الحلقات</div>
+        <div class="col-title" data-i18n="episodes"></div>
         <div class="vlist" id="episodes-list"></div>
       </section>
     </div>
@@ -66,19 +114,25 @@
   <div id="player" class="screen hidden">
     <video id="video" autoplay playsinline></video>
     <div id="spinner" class="spinner hidden"></div>
+    <div id="pause-icon" class="pause-icon hidden"><span></span><span></span></div>
     <div id="osd" class="osd hidden">
-      <div class="osd-row">
+      <div class="osd-top"><div id="osd-clock" class="clock"></div></div>
+      <div class="osd-bottom">
         <div id="osd-num" class="osd-num"></div>
-        <img id="osd-logo" alt="">
-        <div class="osd-text">
+        <div class="osd-logo"><img id="osd-logo" alt=""></div>
+        <div class="osd-main">
           <div id="osd-title" class="osd-title"></div>
-          <div id="osd-epg" class="muted"></div>
+          <div id="osd-live">
+            <div class="pv-now"><span class="badge" data-i18n="now"></span><span id="osd-now"></span></div>
+            <div class="bar"><div id="osd-now-bar"></div></div>
+            <div class="muted"><span id="osd-next"></span></div>
+          </div>
+          <div id="osd-progress" class="progress hidden">
+            <span id="osd-cur">0:00</span>
+            <div class="bar"><div id="osd-bar"></div></div>
+            <span id="osd-dur">0:00</span>
+          </div>
         </div>
-      </div>
-      <div id="osd-progress" class="progress hidden">
-        <span id="osd-cur">0:00</span>
-        <div class="bar"><div id="osd-bar"></div></div>
-        <span id="osd-dur">0:00</span>
       </div>
     </div>
     <div id="zap-list" class="zap hidden">
@@ -93,6 +147,7 @@
 
   <script src="lib/mpegts.js" onerror="this.remove()"></script>
   <script src="js/util.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/xtream.js"></script>
   <script src="js/vlist.js"></script>
   <script src="js/player.js"></script>
