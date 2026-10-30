@@ -459,6 +459,7 @@
       { t: 'setting', id: 'info', label: t('set_exp'), value: u.exp_date ? fmtDate(u.exp_date) : t('unknown') },
       { t: 'setting', id: 'info', label: t('set_conn'), value: String(u.max_connections || '-') },
       { t: 'setting', id: 'info', label: t('set_server'), value: api ? api.server : '' },
+      { t: 'setting', id: 'update', label: t('set_update'), value: t('set_version', { v: window.Boot ? Boot.version : '' }) },
       { t: 'setting', id: 'logout', label: t('set_logout') }
     ];
   }
@@ -486,12 +487,28 @@
       data = {};
       epgCache = {};
       Util.toast(t('set_reload_done'));
+    } else if (it.id === 'update') {
+      checkUpdate();
     } else if (it.id === 'logout') {
       store.remove('creds');
       data = {};
       api = null;
       showLogin('');
     }
+  }
+
+  function checkUpdate() {
+    if (!window.Boot) return;
+    Util.loading(true, t('update_checking'));
+    Boot.check().then(function (found) {
+      Util.loading(false);
+      if (!found) { Util.toast(t('update_none')); return; }
+      Util.toast(t('update_ready'));
+      setTimeout(Boot.restart, 1500);
+    }, function () {
+      Util.loading(false);
+      Util.toast(t('update_fail'));
+    });
   }
 
   function activate(it, list, index) {
@@ -1360,6 +1377,7 @@
     var creds = store.get('creds', null);
     if (creds && creds.server) connect(creds, false);
     else showLogin('');
+    if (window.Boot) Boot.started();
   }
 
   init();
