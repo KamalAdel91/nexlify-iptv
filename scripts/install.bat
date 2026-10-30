@@ -1,6 +1,21 @@
 @echo off
-rem Packages the app and installs it on a TV registered with ares-setup-device.
+rem Gets the latest version from GitHub (when Git is installed), then packages
+rem the app and installs it on a TV registered with ares-setup-device.
 rem Usage: install.bat [device]   (default device name: tv)
+
+rem The pull can replace this very file, so it runs inside one parenthesised block
+rem (read whole before it runs) and then starts the updated copy of the script.
+if /i not "%~1"=="--pulled" (
+  where git >nul 2>nul
+  if not errorlevel 1 if exist "%~dp0..\.git" (
+    echo [*] Getting the latest version from GitHub ...
+    git -C "%~dp0.." pull --ff-only || echo [!] Could not update from GitHub. Installing the version already on this PC.
+  )
+  call "%~f0" --pulled %*
+  exit /b
+)
+shift
+
 setlocal
 set DEVICE=%~1
 if "%DEVICE%"=="" set DEVICE=tv
