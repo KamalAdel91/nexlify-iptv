@@ -619,7 +619,7 @@
 
   function tryExit() {
     var now = Date.now();
-    if (now - exitArmed < 2500) { window.close(); return; }
+    if (now - exitArmed < 2500) { Util.exitApp(); return; }
     exitArmed = now;
     Util.toast(t('exit_confirm'));
   }
@@ -1759,7 +1759,7 @@
   function holdable() { return screen === 'browse' || screen === 'series'; }
 
   function onKeyDown(e) {
-    var k = e.keyCode;
+    var k = Util.normalizeKey(e.keyCode);
     if (!$('loading').classList.contains('hidden')) {
       if (k === K.BACK) e.preventDefault();
       return;
@@ -1785,7 +1785,7 @@
   }
 
   function onKeyUp(e) {
-    if (dlg || e.keyCode !== K.ENTER || !holdable() || zone === 'search') return;
+    if (dlg || Util.normalizeKey(e.keyCode) !== K.ENTER || !holdable() || zone === 'search') return;
     if (enterTimer) {
       clearTimeout(enterTimer);
       enterTimer = null;
@@ -1803,6 +1803,7 @@
   /* ---------------- Init ---------------- */
 
   function init() {
+    Util.initPlatform();
     applyTheme(store.get('theme', 'aurora'));
     applyDir();
     I18n.apply();

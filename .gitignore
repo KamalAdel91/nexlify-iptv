@@ -1,2 +1,3 @@
 dist/
 app/lib/mpegts.js
+build/

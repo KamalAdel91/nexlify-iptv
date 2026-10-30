@@ -116,8 +116,37 @@ var Util = (function () {
     return mpegtsPromise;
   }
 
+  /* ---------- TV platform: LG webOS or Samsung Tizen ---------- */
+
+  var tizen = typeof window.tizen !== 'undefined' && !!window.tizen.tvinputdevice;
+
+  // Samsung remotes send other codes for a few keys: map them to the webOS ones the app uses
+  var TIZEN_KEYS = { 10009: KEY.BACK, 427: KEY.CH_UP, 428: KEY.CH_DOWN };
+  function normalizeKey(code) {
+    return tizen && TIZEN_KEYS[code] ? TIZEN_KEYS[code] : code;
+  }
+
+  // Samsung only delivers media, colour, channel and number keys that the app asks for
+  function initPlatform() {
+    if (!tizen) return;
+    var wanted = ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaFastForward', 'MediaRewind',
+      'ChannelUp', 'ChannelDown', 'ColorF2Yellow', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    try {
+      var supported = window.tizen.tvinputdevice.getSupportedKeys().map(function (k) { return k.name; });
+      window.tizen.tvinputdevice.registerKeyBatch(wanted.filter(function (n) { return supported.indexOf(n) >= 0; }));
+    } catch (e) { /* older firmware: the arrows, OK and Back still work */ }
+  }
+
+  function exitApp() {
+    if (tizen) {
+      try { window.tizen.application.getCurrentApplication().exit(); return; } catch (e) { /* fall through */ }
+    }
+    window.close();
+  }
+
   return {
     KEY: KEY, store: store, $: $, el: el, show: show, toast: toast, loading: loading,
-    b64: b64, fmtTime: fmtTime, clock: clock, debounce: debounce, loadMpegts: loadMpegts
+    b64: b64, fmtTime: fmtTime, clock: clock, debounce: debounce, loadMpegts: loadMpegts,
+    isTizen: tizen, normalizeKey: normalizeKey, initPlatform: initPlatform, exitApp: exitApp
   };
 })();
