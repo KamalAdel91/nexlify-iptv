@@ -14,6 +14,9 @@ echo.
 set NAME=
 set /p NAME=Short name for this TV, no spaces (e.g. bedroom):
 if "%NAME%"=="" set NAME=tv2
+rem A device name cannot contain spaces: "Ki Home" becomes "Ki-Home"
+set "NAME=%NAME: =-%"
+echo [*] This TV will be called: %NAME%
 set IP=
 set /p IP=TV IP address (shown in the Developer Mode app):
 if "%IP%"=="" (

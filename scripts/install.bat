@@ -14,7 +14,8 @@ if /i not "%~1"=="--pulled" (
   call "%~f0" --pulled %*
   exit /b
 )
-shift
+rem /1 keeps %0, so %~dp0 is still this script's folder
+shift /1
 
 setlocal
 set DEVICE=%~1
@@ -45,7 +46,12 @@ echo [*] Packaging ...
 call ares-package app -o dist
 if errorlevel 1 exit /b 1
 
+set IPK=
 for %%f in (dist\*.ipk) do set IPK=%%f
+if "%IPK%"=="" (
+  echo [X] Packaging failed, so nothing was installed.
+  exit /b 1
+)
 set LOG=%TEMP%\nexlify-install.log
 
 rem ares-* tools can exit with code 0 even on failure, so also look for "ERR!" in their output

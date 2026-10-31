@@ -13,7 +13,8 @@ if /i not "%~1"=="--pulled" (
   call "%~f0" --pulled %*
   exit /b
 )
-shift
+rem /1 keeps %0, so %~dp0 is still this script's folder
+shift /1
 
 setlocal
 chcp 65001 >nul
