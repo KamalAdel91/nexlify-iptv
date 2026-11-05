@@ -1,13 +1,13 @@
 {
   "id": "com.homeiptv.player",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "vendor": "Nexlify",
   "type": "web",
   "main": "index.html",
   "title": "Nexlify",
   "icon": "icon.png",
   "largeIcon": "largeIcon.png",
-  "iconColor": "#4f8cff",
+  "iconColor": "#6b4bff",
   "resolution": "1920x1080",
   "disableBackHistoryAPI": true,
   "requiredACG": []

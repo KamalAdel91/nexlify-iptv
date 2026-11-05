@@ -29,4 +29,5 @@ fs.rmSync(OUT, { recursive: true, force: true });
 copyDir(APP, OUT);
 const config = fs.readFileSync(path.join(ROOT, 'tizen', 'config.xml'), 'utf8').split('{{VERSION}}').join(version);
 fs.writeFileSync(path.join(OUT, 'config.xml'), config);
+fs.copyFileSync(path.join(ROOT, 'tizen', 'icon.png'), path.join(OUT, 'samsung-icon.png'));
 console.log(`[*] Samsung app ${version} prepared in ${path.relative(ROOT, OUT)}`);

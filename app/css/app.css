@@ -83,15 +83,16 @@ html, body {
 
 /* ---------- Brand ---------- */
 .brand { display: flex; align-items: center; padding: 0 .6rem 2.2rem; }
+/* The app icon itself (same artwork as icon.png), embedded so over-the-air updates carry it */
 .brand-mark {
   width: 2.8rem; height: 2.8rem; border-radius: .8rem; flex: none;
-  background: var(--grad); color: var(--on-accent);
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 900; font-size: 1.6rem;
-  box-shadow: 0 .4rem 1.4rem var(--accent-glow);
+  background: #6b4bff url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDI0IDEwMjQiIHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiPjxkZWZzPgo8bGluZWFyR3JhZGllbnQgaWQ9Im54QmciIHgxPSIwLjEiIHkxPSIwIiB4Mj0iMC45IiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjNEE2Q0ZGIi8+PHN0b3Agb2Zmc2V0PSIwLjUiIHN0b3AtY29sb3I9IiM2QjRCRkYiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNCNDNDRjAiLz48L2xpbmVhckdyYWRpZW50Pgo8cmFkaWFsR3JhZGllbnQgaWQ9Im54R2wiIGN4PSIwLjIiIGN5PSIwLjA4IiByPSIwLjgiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI0ZGRkZGRiIgc3RvcC1vcGFjaXR5PSIwLjMyIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjRkZGRkZGIiBzdG9wLW9wYWNpdHk9IjAiLz48L3JhZGlhbEdyYWRpZW50Pgo8cmFkaWFsR3JhZGllbnQgaWQ9Im54VmciIGN4PSIwLjUiIGN5PSIwLjUiIHI9IjAuNzUiPjxzdG9wIG9mZnNldD0iMC42IiBzdG9wLWNvbG9yPSIjMUIwQTRBIiBzdG9wLW9wYWNpdHk9IjAiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMxQjBBNEEiIHN0b3Atb3BhY2l0eT0iMC4zNSIvPjwvcmFkaWFsR3JhZGllbnQ+CjxsaW5lYXJHcmFkaWVudCBpZD0ibnhNayIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiIHgxPSIwIiB5MT0iMjUwIiB4Mj0iMCIgeTI9Ijc4MCI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjRkZGRkZGIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjRTZFMUZGIi8+PC9saW5lYXJHcmFkaWVudD4KPGZpbHRlciBpZD0ibnhTaCIgeD0iLTMwJSIgeT0iLTMwJSIgd2lkdGg9IjE2MCUiIGhlaWdodD0iMTYwJSI+CiAgPGZlR2F1c3NpYW5CbHVyIGluPSJTb3VyY2VBbHBoYSIgc3RkRGV2aWF0aW9uPSIyNCIvPjxmZU9mZnNldCBkeT0iMjAiIHJlc3VsdD0iYiIvPgogIDxmZUZsb29kIGZsb29kLWNvbG9yPSIjMTYwNjQyIiBmbG9vZC1vcGFjaXR5PSIwLjUiLz48ZmVDb21wb3NpdGUgaW4yPSJiIiBvcGVyYXRvcj0iaW4iLz4KICA8ZmVNZXJnZT48ZmVNZXJnZU5vZGUvPjxmZU1lcmdlTm9kZSBpbj0iU291cmNlR3JhcGhpYyIvPjwvZmVNZXJnZT4KPC9maWx0ZXI+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiIGZpbGw9InVybCgjbnhCZykiLz48cmVjdCB3aWR0aD0iMTAyNCIgaGVpZ2h0PSIxMDI0IiBmaWxsPSJ1cmwoI254R2wpIi8+PHJlY3Qgd2lkdGg9IjEwMjQiIGhlaWdodD0iMTAyNCIgZmlsbD0idXJsKCNueFZnKSIvPjxwYXRoIGQ9Ik0gMzM0IDcyMiBMIDMzNCAzMDIgTCA2OTAgNzIyIEwgNjkwIDMwMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI254TWspIiBzdHJva2Utd2lkdGg9IjEzMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBmaWx0ZXI9InVybCgjbnhTaCkiLz48L3N2Zz4=") center / cover no-repeat;
+  box-shadow: 0 .4rem 1.4rem rgba(107, 75, 255, .4);
 }
-.brand-name { font-size: 1.7rem; font-weight: 800; letter-spacing: .03rem; margin-inline-start: .8rem; direction: ltr; }
-.brand-mark.big { width: 6rem; height: 6rem; font-size: 3.4rem; border-radius: 1.6rem; }
+.brand-name { font-size: 1.7rem; font-weight: 800; letter-spacing: .03rem; direction: ltr; }
+/* The gap sits on the mark: the name is always LTR, so its own inline margins would point the wrong way in Arabic */
+.brand .brand-mark { margin-inline-end: .8rem; }
+.brand-mark.big { width: 6rem; height: 6rem; border-radius: 1.6rem; }
 .brand-name.big { font-size: 3.6rem; margin: 1.2rem 0 0; }
 .brand-tag { color: var(--muted); letter-spacing: .4rem; text-transform: uppercase; margin-top: .4rem; direction: ltr; }
 
@@ -141,6 +142,7 @@ html, body {
 #sidebar { transition: width .2s, padding .2s; overflow: hidden; }
 #sidebar.compact { width: 6.4rem; padding: 2rem .9rem 1.6rem; }
 #sidebar.compact .brand { justify-content: center; padding: 0 0 2.2rem; }
+#sidebar.compact .brand .brand-mark { margin: 0; }
 #sidebar.compact .brand-name,
 #sidebar.compact .menu-item span,
 #sidebar.compact #date,

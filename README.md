@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" width="128" alt="Nexlify"></p>
+
 # Nexlify: IPTV Player لشاشات LG (webOS) وسامسونج (Tizen)
 
 تطبيق مجاني لتشغيل اشتراك Xtream على شاشات LG وسامسونج، بالعربي والإنجليزي.
